@@ -1,0 +1,30 @@
+{
+  "name": "codeforces-enhancer-modern",
+  "version": "2.0.0",
+  "description": "Modern Chrome extension that enhances Codeforces with multi-graph, colorized standings, and more",
+  "author": "JehadurRE",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JehadurRE/cf-enhancer-chrome.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "codeforces",
+    "competitive-programming",
+    "rating-graph",
+    "standings"
+  ],
+  "scripts": {
+    "build": "node scripts/build.js",
+    "zip": "node scripts/package.js",
+    "clean": "node scripts/clean.js",
+    "dev": "echo 'Load src folder in Chrome Developer Mode'",
+    "lint": "echo 'Linting not configured yet'",
+    "test": "echo 'Testing not configured yet'"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
