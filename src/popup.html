@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CF Enhancer Quick Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 320px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .header {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .header p {
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .quick-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .quick-toggle:last-child {
+      border-bottom: none;
+    }
+
+    .toggle-info {
+      flex: 1;
+    }
+
+    .toggle-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .toggle-desc {
+      font-size: 0.75rem;
+      opacity: 0.7;
+    }
+
+    .mini-toggle {
+      width: 40px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .mini-toggle.active {
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .mini-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .mini-toggle.active .mini-slider {
+      transform: translateX(20px);
+      background: #4a69bd;
+    }
+
+    .footer {
+      padding: 15px 20px;
+      background: rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .footer-button {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .footer-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .status-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #28a745;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .status-indicator.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚡ CF Enhancer</h1>
+    <p>Quick Settings</p>
+  </div>
+
+  <div class="content">
+    <div class="quick-toggle">
+      <div class="toggle-info">
+        <div class="toggle-title">Multi-Graph</div>
+        <div class="toggle-desc">Compare rating graphs</div>
+      </div>
+      <div class="mini-toggle" id="popupMultiGraph">
+        <div class="mini-slider"></div>
+      </div>
+    </div>
+
+    <div class="quick-toggle">
+      <div class="toggle-info">
+        <div class="toggle-title">Colorize Standings</div>
+        <div class="toggle-desc">Color by language</div>
+      </div>
+      <div class="mini-toggle" id="popupColorizeStandings">
+        <div class="mini-slider"></div>
+      </div>
+    </div>
+
+    <div class="quick-toggle">
+      <div class="toggle-info">
+        <div class="toggle-title">Show Attempts</div>
+        <div class="toggle-desc">Display attempt counts</div>
+      </div>
+      <div class="mini-toggle" id="popupShowAttempts">
+        <div class="mini-slider"></div>
+      </div>
+    </div>
+
+    <div class="quick-toggle">
+      <div class="toggle-info">
+        <div class="toggle-title">Hide Solved</div>
+        <div class="toggle-desc">Toggle solved problems</div>
+      </div>
+      <div class="mini-toggle" id="popupHideSolved">
+        <div class="mini-slider"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="#" class="footer-button" id="openFullOptions">Full Options</a>
+  </div>
+
+  <div class="status-indicator" id="statusIndicator"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
