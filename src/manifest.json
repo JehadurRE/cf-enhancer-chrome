@@ -1,42 +1,83 @@
 {
-   "content_scripts": [ 
-
-      {
-         "all_frames": false,
-         "js": ["options.js", "multiGraph.js"],
-         "matches": ["https://codeforces.com/profile/*", "https://www.codeforces.com/profile/*"],
-         "run_at": "document_idle"
-      },
-
-      {
-         "all_frames": false,
-         "js": ["options.js", "colorizeStandings.js"],
-         "matches": ["https://codeforces.com/contest/*/standings*", "https://www.codeforces.com/contest/*/standings*", "https://www.codeforces.com/contest/*/room/*", "https://codeforces.com/contest/*/room/*", "https://www.codeforces.com/gym/*/standings*", "https://codeforces.com/gym/*/standings*", "https://www.codeforces.com/spectator/*/standings*", "https://codeforces.com/spectator/*/standings*"],
-         "run_at": "document_idle"
-      },
-
-      {
-         "all_frames": false,
-         "js": ["options.js", "hideSolved.js"],
-         "matches": ["https://codeforces.com/problemset", "https://www.codeforces.com/problemset", "https://www.codeforces.com/problemset/page/*", "https://codeforces.com/problemset/page/*"],
-         "run_at": "document_idle"
-      }
-
-   ],
-   "description": "Makes Codeforces better: multiple ratings graph, colorizes standings, adds \"Hide/Show solved problems\" link",
+   "manifest_version": 3,
+   "name": "Codeforces Enhancer by JehadurRE",
+   "short_name": "CF Enhancer",
+   "version": "2.0.0",
+   "description": "Enhanced Codeforces experience: multiple ratings graph, colorized standings, hide/show solved problems. Modern rebuild by JehadurRE, original concept by agul.",
+   "author": "JehadurRE",
+   
    "icons": {
       "16": "logo_16x16.png",
       "48": "logo_48x48.png",
       "128": "logo_128x128.png"
    },
-   "manifest_version": 2,
-   "name": "Codeforces Enhancer",
-   "short_name": "CF Enhancer",
+   
+   "content_scripts": [
+      {
+         "js": ["utils/storage.js", "utils/errorHandler.js", "features/multiGraph.js"],
+         "matches": [
+            "https://codeforces.com/profile/*", 
+            "https://www.codeforces.com/profile/*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "js": ["utils/storage.js", "utils/errorHandler.js", "features/colorizeStandings.js"],
+         "matches": [
+            "https://codeforces.com/contest/*/standings*", 
+            "https://www.codeforces.com/contest/*/standings*",
+            "https://www.codeforces.com/contest/*/room/*", 
+            "https://codeforces.com/contest/*/room/*",
+            "https://www.codeforces.com/gym/*/standings*", 
+            "https://codeforces.com/gym/*/standings*",
+            "https://www.codeforces.com/spectator/*/standings*", 
+            "https://codeforces.com/spectator/*/standings*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "js": ["utils/storage.js", "utils/errorHandler.js", "features/hideSolved.js"],
+         "matches": [
+            "https://codeforces.com/problemset*", 
+            "https://www.codeforces.com/problemset*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "js": ["utils/storage.js", "utils/errorHandler.js", "features/darkMode.js"],
+         "matches": [
+            "https://codeforces.com/*", 
+            "https://www.codeforces.com/*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "js": ["utils/storage.js", "utils/errorHandler.js", "features/recommendedQuestions.js"],
+         "matches": [
+            "https://codeforces.com/*", 
+            "https://www.codeforces.com/*"
+         ],
+         "run_at": "document_idle"
+      }
+   ],
+   
    "permissions": ["storage"],
-   "version": "1.2",
-   "options_page": "options_page.html",
+   "host_permissions": [
+      "https://codeforces.com/*",
+      "https://www.codeforces.com/*"
+   ],
+   
    "options_ui": {
-    "page": "options.html",
-    "chrome_style": true
-  }
+      "page": "options.html",
+      "open_in_tab": false
+   },
+   
+   "action": {
+      "default_popup": "popup.html",
+      "default_title": "Codeforces Enhancer Options"
+   },
+   
+   "content_security_policy": {
+      "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self';"
+   }
 }
