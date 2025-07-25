@@ -78,6 +78,23 @@ class RecommendedQuestionsFeature {
   }
 
   /**
+   * Fetch with timeout
+   */
+  async fetchWithTimeout(url, timeout = 10000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  /**
    * Get user information from the page
    */
   async getUserInfo() {
@@ -109,7 +126,7 @@ class RecommendedQuestionsFeature {
     if (this.userHandle) {
       try {
         // Get user rating from API
-        const response = await fetch(`${this.apiBaseUrl}user.info?handles=${this.userHandle}`);
+        const response = await this.fetchWithTimeout(`${this.apiBaseUrl}user.info?handles=${this.userHandle}`);
         const data = await response.json();
         
         if (data.status === 'OK' && data.result.length > 0) {
@@ -158,7 +175,15 @@ class RecommendedQuestionsFeature {
       </div>
       <div id="cf-recommendations-content">
         <div style="text-align: center; padding: 20px; color: #666;">
-          <div style="margin-bottom: 10px;">⏳</div>
+          <div style="margin-bottom: 10px;">
+            <div style="border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            <style>
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            </style>
+          </div>
           Loading recommendations...
         </div>
       </div>
@@ -216,7 +241,14 @@ class RecommendedQuestionsFeature {
       contentDiv.innerHTML = `
         <div style="text-align: center; padding: 20px; color: #d32f2f;">
           <div style="margin-bottom: 10px;">❌</div>
-          Error loading recommendations
+          Error loading recommendations<br>
+          <span style="font-size: 11px; color: #666;">Check your internet connection</span>
+          <div style="margin-top: 10px;">
+            <button onclick="window.cfRecommendations.refreshRecommendations();" 
+                    style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
+              🔄 Try Again
+            </button>
+          </div>
         </div>
       `;
     }
@@ -229,7 +261,7 @@ class RecommendedQuestionsFeature {
     if (!this.userHandle) return new Set();
     
     try {
-      const response = await fetch(`${this.apiBaseUrl}user.status?handle=${this.userHandle}&from=1&count=1000`);
+      const response = await this.fetchWithTimeout(`${this.apiBaseUrl}user.status?handle=${this.userHandle}&from=1&count=1000`);
       const data = await response.json();
       
       const solvedProblems = new Set();
@@ -277,7 +309,7 @@ class RecommendedQuestionsFeature {
         problems = this.cachedProblems.problems;
         statistics = this.cachedProblems.statistics;
       } else {
-        const response = await fetch(`${this.apiBaseUrl}problemset.problems`);
+        const response = await this.fetchWithTimeout(`${this.apiBaseUrl}problemset.problems`);
         const data = await response.json();
         
         if (data.status !== 'OK') {
@@ -443,7 +475,9 @@ class RecommendedQuestionsFeature {
     // Show loading state
     contentDiv.innerHTML = `
       <div style="text-align: center; padding: 20px; color: #666;">
-        <div style="margin-bottom: 10px;">⏳</div>
+        <div style="margin-bottom: 10px;">
+          <div style="border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        </div>
         Loading new recommendations...
       </div>
     `;
