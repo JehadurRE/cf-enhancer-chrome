@@ -141,6 +141,31 @@ class RecommendedQuestionsFeature {
   }
 
   /**
+   * Check if dark mode is enabled
+   */
+  isDarkModeEnabled() {
+    return document.body.classList.contains('cf-dark-mode') || 
+           document.documentElement.classList.contains('cf-dark-mode') ||
+           localStorage.getItem('cf-dark-mode') === 'true';
+  }
+
+  /**
+   * Get theme-aware colors
+   */
+  getThemeColors() {
+    const isDark = this.isDarkModeEnabled();
+    return {
+      background: isDark ? '#2d2d2d' : '#f8f8f8',
+      border: isDark ? '#555' : '#ddd',
+      text: isDark ? '#e0e0e0' : '#333',
+      cardBackground: isDark ? '#3d3d3d' : '#fff',
+      cardBorder: isDark ? '#555' : '#eee',
+      mutedText: isDark ? '#aaa' : '#666',
+      lightText: isDark ? '#888' : '#888'
+    };
+  }
+
+  /**
    * Add recommendations panel to the page
    */
   addRecommendationsPanel() {
@@ -148,6 +173,8 @@ class RecommendedQuestionsFeature {
     if (document.getElementById('cf-recommendations-panel')) {
       return;
     }
+    
+    const colors = this.getThemeColors();
     
     const panel = document.createElement('div');
     panel.id = 'cf-recommendations-panel';
@@ -157,8 +184,8 @@ class RecommendedQuestionsFeature {
       right: 10px;
       width: 300px;
       max-height: 400px;
-      background: #f8f8f8;
-      border: 1px solid #ddd;
+      background: ${colors.background};
+      border: 1px solid ${colors.border};
       border-radius: 8px;
       padding: 15px;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -170,13 +197,13 @@ class RecommendedQuestionsFeature {
     
     panel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3 style="margin: 0; color: #333; font-size: 14px;">📚 Recommended Problems</h3>
-        <button id="cf-recommendations-close" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">×</button>
+        <h3 style="margin: 0; color: ${colors.text}; font-size: 14px;">📚 Recommended Problems</h3>
+        <button id="cf-recommendations-close" style="background: none; border: none; font-size: 16px; cursor: pointer; color: ${colors.mutedText};">×</button>
       </div>
       <div id="cf-recommendations-content">
-        <div style="text-align: center; padding: 20px; color: #666;">
+        <div style="text-align: center; padding: 20px; color: ${colors.mutedText};">
           <div style="margin-bottom: 10px;">
-            <div style="border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            <div style="border: 2px solid ${colors.border}; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
             <style>
               @keyframes spin {
                 0% { transform: rotate(0deg); }
@@ -187,7 +214,7 @@ class RecommendedQuestionsFeature {
           Loading recommendations...
         </div>
       </div>
-      <div style="margin-top: 10px; font-size: 11px; color: #888; text-align: center;">
+      <div style="margin-top: 10px; font-size: 11px; color: ${colors.lightText}; text-align: center;">
         Based on your rating: ${this.userRating || 'Unknown'}
       </div>
     `;
@@ -214,6 +241,65 @@ class RecommendedQuestionsFeature {
     
     document.body.appendChild(panel);
     console.log('[CF Enhancer] Recommendations panel added');
+    
+    // Listen for dark mode changes
+    this.setupDarkModeListener();
+  }
+
+  /**
+   * Setup listener for dark mode changes
+   */
+  setupDarkModeListener() {
+    // Listen for class changes on body and documentElement
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          this.updatePanelTheme();
+        }
+      });
+    });
+
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    // Also listen for localStorage changes
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'cf-dark-mode') {
+        this.updatePanelTheme();
+      }
+    });
+  }
+
+  /**
+   * Update panel theme when dark mode changes
+   */
+  updatePanelTheme() {
+    const panel = document.getElementById('cf-recommendations-panel');
+    if (!panel) return;
+    
+    const colors = this.getThemeColors();
+    
+    // Update panel background and border
+    panel.style.background = colors.background;
+    panel.style.borderColor = colors.border;
+    
+    // Update header text color
+    const header = panel.querySelector('h3');
+    if (header) header.style.color = colors.text;
+    
+    // Update close button color
+    const closeBtn = panel.querySelector('#cf-recommendations-close');
+    if (closeBtn) closeBtn.style.color = colors.mutedText;
+    
+    // Update rating text color
+    const ratingText = panel.querySelector('div:last-child');
+    if (ratingText) ratingText.style.color = colors.lightText;
+    
+    // If recommendations are loaded, refresh them with new colors
+    const contentDiv = document.getElementById('cf-recommendations-content');
+    if (contentDiv && this.lastRecommendations && this.lastRecommendations.length > 0) {
+      this.displayRecommendations(this.lastRecommendations, contentDiv);
+    }
   }
 
   /**
@@ -238,11 +324,12 @@ class RecommendedQuestionsFeature {
       
     } catch (error) {
       console.error('[CF Enhancer] Error loading recommendations:', error);
+      const colors = this.getThemeColors();
       contentDiv.innerHTML = `
         <div style="text-align: center; padding: 20px; color: #d32f2f;">
           <div style="margin-bottom: 10px;">❌</div>
           Error loading recommendations<br>
-          <span style="font-size: 11px; color: #666;">Check your internet connection</span>
+          <span style="font-size: 11px; color: ${colors.mutedText};">Check your internet connection</span>
           <div style="margin-top: 10px;">
             <button onclick="window.cfRecommendations.refreshRecommendations();" 
                     style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
@@ -405,9 +492,11 @@ class RecommendedQuestionsFeature {
    * Display recommendations in the panel
    */
   displayRecommendations(recommendations, contentDiv) {
+    const colors = this.getThemeColors();
+    
     if (recommendations.length === 0) {
       contentDiv.innerHTML = `
-        <div style="text-align: center; padding: 20px; color: #666;">
+        <div style="text-align: center; padding: 20px; color: ${colors.mutedText};">
           <div style="margin-bottom: 10px;">🤔</div>
           No recommendations found.<br>
           Try solving more problems!
@@ -423,7 +512,7 @@ class RecommendedQuestionsFeature {
       const difficultyColor = this.getRatingColor(problem.rating);
       
       html += `
-        <div style="margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #eee; border-radius: 4px;">
+        <div style="margin-bottom: 8px; padding: 8px; background: ${colors.cardBackground}; border: 1px solid ${colors.cardBorder}; border-radius: 4px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div style="flex: 1;">
               <a href="${problemUrl}" target="_blank" style="color: #0066cc; text-decoration: none; font-weight: bold; font-size: 12px;">
@@ -433,7 +522,7 @@ class RecommendedQuestionsFeature {
                 <span style="color: ${difficultyColor}; font-weight: bold; font-size: 11px;">
                   ★${problem.rating}
                 </span>
-                <span style="color: #888; font-size: 11px; margin-left: 8px;">
+                <span style="color: ${colors.lightText}; font-size: 11px; margin-left: 8px;">
                   ✓${problem.stats.solvedCount}
                 </span>
               </div>
@@ -472,18 +561,40 @@ class RecommendedQuestionsFeature {
     const contentDiv = document.getElementById('cf-recommendations-content');
     if (!contentDiv) return;
     
+    const colors = this.getThemeColors();
+    
     // Show loading state
     contentDiv.innerHTML = `
-      <div style="text-align: center; padding: 20px; color: #666;">
+      <div style="text-align: center; padding: 20px; color: ${colors.mutedText};">
         <div style="margin-bottom: 10px;">
-          <div style="border: 2px solid #f3f3f3; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+          <div style="border: 2px solid ${colors.border}; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
         </div>
         Loading new recommendations...
       </div>
     `;
     
-    // Load fresh recommendations
-    await this.loadRecommendations();
+    try {
+      // Clear the last recommendations to force new ones
+      this.lastRecommendations = [];
+      
+      // Load fresh recommendations
+      await this.loadRecommendations();
+    } catch (error) {
+      console.error('[CF Enhancer] Error in refreshRecommendations:', error);
+      contentDiv.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: #d32f2f;">
+          <div style="margin-bottom: 10px;">❌</div>
+          Error refreshing recommendations<br>
+          <span style="font-size: 11px; color: ${colors.mutedText};">Check your internet connection</span>
+          <div style="margin-top: 10px;">
+            <button onclick="window.cfRecommendations.refreshRecommendations();" 
+                    style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
+              🔄 Try Again
+            </button>
+          </div>
+        </div>
+      `;
+    }
   }
 
   /**
