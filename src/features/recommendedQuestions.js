@@ -144,9 +144,27 @@ class RecommendedQuestionsFeature {
    * Check if dark mode is enabled
    */
   isDarkModeEnabled() {
-    return document.body.classList.contains('cf-dark-mode') || 
-           document.documentElement.classList.contains('cf-dark-mode') ||
-           localStorage.getItem('cf-dark-mode') === 'true';
+    // Check multiple sources for dark mode status
+    const bodyHasDarkMode = document.body.classList.contains('cf-dark-mode');
+    const htmlHasDarkMode = document.documentElement.classList.contains('cf-dark-mode');
+    const localStorageDarkMode = localStorage.getItem('cf-dark-mode') === 'true';
+    const bodyHasDarkClass = document.body.classList.contains('dark-mode');
+    const htmlHasDarkClass = document.documentElement.classList.contains('dark-mode');
+    
+    // Check for any dark mode indicators
+    const isDark = bodyHasDarkMode || htmlHasDarkMode || localStorageDarkMode || 
+                   bodyHasDarkClass || htmlHasDarkClass;
+    
+    console.log('[CF Enhancer] Dark mode check:', {
+      bodyHasDarkMode,
+      htmlHasDarkMode,
+      localStorageDarkMode,
+      bodyHasDarkClass,
+      htmlHasDarkClass,
+      isDark
+    });
+    
+    return isDark;
   }
 
   /**
@@ -250,11 +268,14 @@ class RecommendedQuestionsFeature {
    * Setup listener for dark mode changes
    */
   setupDarkModeListener() {
+    console.log('[CF Enhancer] Setting up dark mode listeners');
+    
     // Listen for class changes on body and documentElement
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-          this.updatePanelTheme();
+          console.log('[CF Enhancer] Class mutation detected, updating theme');
+          setTimeout(() => this.updatePanelTheme(), 100);
         }
       });
     });
@@ -262,12 +283,20 @@ class RecommendedQuestionsFeature {
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     
-    // Also listen for localStorage changes
+    // Listen for localStorage changes
     window.addEventListener('storage', (e) => {
       if (e.key === 'cf-dark-mode') {
-        this.updatePanelTheme();
+        console.log('[CF Enhancer] Storage change detected, updating theme');
+        setTimeout(() => this.updatePanelTheme(), 100);
       }
     });
+    
+    // Also check periodically for theme changes (fallback)
+    setInterval(() => {
+      this.updatePanelTheme();
+    }, 2000);
+    
+    console.log('[CF Enhancer] Dark mode listeners setup complete');
   }
 
   /**
@@ -278,27 +307,54 @@ class RecommendedQuestionsFeature {
     if (!panel) return;
     
     const colors = this.getThemeColors();
+    const isDark = this.isDarkModeEnabled();
     
-    // Update panel background and border
-    panel.style.background = colors.background;
+    console.log('[CF Enhancer] Updating panel theme, isDark:', isDark, 'colors:', colors);
+    
+    // Update panel background and border with transition
+    panel.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
+    panel.style.backgroundColor = colors.background;
     panel.style.borderColor = colors.border;
     
     // Update header text color
     const header = panel.querySelector('h3');
-    if (header) header.style.color = colors.text;
+    if (header) {
+      header.style.transition = 'color 0.3s ease';
+      header.style.color = colors.text;
+    }
     
     // Update close button color
     const closeBtn = panel.querySelector('#cf-recommendations-close');
-    if (closeBtn) closeBtn.style.color = colors.mutedText;
+    if (closeBtn) {
+      closeBtn.style.transition = 'color 0.3s ease';
+      closeBtn.style.color = colors.mutedText;
+    }
     
     // Update rating text color
     const ratingText = panel.querySelector('div:last-child');
-    if (ratingText) ratingText.style.color = colors.lightText;
+    if (ratingText) {
+      ratingText.style.transition = 'color 0.3s ease';
+      ratingText.style.color = colors.lightText;
+    }
     
-    // If recommendations are loaded, refresh them with new colors
+    // Update content area background and text colors
     const contentDiv = document.getElementById('cf-recommendations-content');
-    if (contentDiv && this.lastRecommendations && this.lastRecommendations.length > 0) {
-      this.displayRecommendations(this.lastRecommendations, contentDiv);
+    if (contentDiv) {
+      // Update all card backgrounds
+      const cards = contentDiv.querySelectorAll('div[style*="background"]');
+      cards.forEach(card => {
+        if (card.style.background.includes('#fff') || card.style.background.includes('#3d3d3d')) {
+          card.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
+          card.style.backgroundColor = colors.cardBackground;
+          card.style.borderColor = colors.cardBorder;
+        }
+      });
+      
+      // If recommendations are loaded, refresh them with new colors
+      if (this.lastRecommendations && this.lastRecommendations.length > 0) {
+        console.log('[CF Enhancer] Refreshing recommendations display with new theme');
+        this.displayRecommendations(this.lastRecommendations, contentDiv);
+      }
     }
   }
 
@@ -331,13 +387,24 @@ class RecommendedQuestionsFeature {
           Error loading recommendations<br>
           <span style="font-size: 11px; color: ${colors.mutedText};">Check your internet connection</span>
           <div style="margin-top: 10px;">
-            <button onclick="window.cfRecommendations.refreshRecommendations();" 
+            <button id="cf-retry-btn" 
                     style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
               🔄 Try Again
             </button>
           </div>
         </div>
       `;
+      
+      // Add event listener for retry button
+      setTimeout(() => {
+        const retryBtn = document.getElementById('cf-retry-btn');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            console.log('[CF Enhancer] Retry button clicked');
+            this.refreshRecommendations();
+          });
+        }
+      }, 100);
     }
   }
 
@@ -510,12 +577,13 @@ class RecommendedQuestionsFeature {
     recommendations.forEach((problem, index) => {
       const problemUrl = `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
       const difficultyColor = this.getRatingColor(problem.rating);
+      const linkColor = colors.background === '#2d2d2d' ? '#64b5f6' : '#0066cc';
       
       html += `
         <div style="margin-bottom: 8px; padding: 8px; background: ${colors.cardBackground}; border: 1px solid ${colors.cardBorder}; border-radius: 4px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div style="flex: 1;">
-              <a href="${problemUrl}" target="_blank" style="color: #0066cc; text-decoration: none; font-weight: bold; font-size: 12px;">
+              <a href="${problemUrl}" target="_blank" style="color: ${linkColor}; text-decoration: none; font-weight: bold; font-size: 12px;">
                 ${problem.contestId}${problem.index}. ${problem.name}
               </a>
               <div style="margin-top: 3px;">
@@ -527,9 +595,11 @@ class RecommendedQuestionsFeature {
                 </span>
               </div>
               <div style="margin-top: 3px; font-size: 10px;">
-                ${problem.tags.slice(0, 3).map(tag => 
-                  `<span style="background: #e8f4fd; color: #1976d2; padding: 1px 4px; border-radius: 2px; margin-right: 3px;">${tag}</span>`
-                ).join('')}
+                ${problem.tags.slice(0, 3).map(tag => {
+                  const tagBg = colors.background === '#2d2d2d' ? '#1e3a5f' : '#e8f4fd';
+                  const tagColor = colors.background === '#2d2d2d' ? '#64b5f6' : '#1976d2';
+                  return `<span style="background: ${tagBg}; color: ${tagColor}; padding: 1px 4px; border-radius: 2px; margin-right: 3px;">${tag}</span>`;
+                }).join('')}
               </div>
             </div>
           </div>
@@ -541,7 +611,7 @@ class RecommendedQuestionsFeature {
     
     html += `
       <div style="margin-top: 10px; text-align: center;">
-        <button onclick="window.cfRecommendations.refreshRecommendations();" 
+        <button id="cf-refresh-btn" 
                 style="background: #1976d2; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 11px;">
           🔄 Refresh
         </button>
@@ -549,6 +619,15 @@ class RecommendedQuestionsFeature {
     `;
     
     contentDiv.innerHTML = html;
+    
+    // Add event listener for refresh button
+    const refreshBtn = document.getElementById('cf-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        console.log('[CF Enhancer] Refresh button clicked');
+        this.refreshRecommendations();
+      });
+    }
     
     // Store reference for refresh functionality
     window.cfRecommendations = this;
@@ -587,13 +666,24 @@ class RecommendedQuestionsFeature {
           Error refreshing recommendations<br>
           <span style="font-size: 11px; color: ${colors.mutedText};">Check your internet connection</span>
           <div style="margin-top: 10px;">
-            <button onclick="window.cfRecommendations.refreshRecommendations();" 
+            <button id="cf-retry-refresh-btn" 
                     style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
               🔄 Try Again
             </button>
           </div>
         </div>
       `;
+      
+      // Add event listener for retry button
+      setTimeout(() => {
+        const retryBtn = document.getElementById('cf-retry-refresh-btn');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            console.log('[CF Enhancer] Retry refresh button clicked');
+            this.refreshRecommendations();
+          });
+        }
+      }, 100);
     }
   }
 
