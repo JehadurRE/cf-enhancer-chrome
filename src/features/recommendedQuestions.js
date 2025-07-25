@@ -65,7 +65,7 @@ class RecommendedQuestionsFeature {
       
       if (this.userHandle) {
         // Add recommendations panel
-        this.addRecommendationsPanel();
+        await this.addRecommendationsPanel();
         
         // Load and display recommendations
         await this.loadRecommendations();
@@ -143,35 +143,54 @@ class RecommendedQuestionsFeature {
   /**
    * Check if dark mode is enabled
    */
-  isDarkModeEnabled() {
-    // Check multiple sources for dark mode status
-    const bodyHasDarkMode = document.body.classList.contains('cf-dark-mode');
-    const htmlHasDarkMode = document.documentElement.classList.contains('cf-dark-mode');
-    const localStorageDarkMode = localStorage.getItem('cf-dark-mode') === 'true';
-    const bodyHasDarkClass = document.body.classList.contains('dark-mode');
-    const htmlHasDarkClass = document.documentElement.classList.contains('dark-mode');
-    
-    // Check for any dark mode indicators
-    const isDark = bodyHasDarkMode || htmlHasDarkMode || localStorageDarkMode || 
-                   bodyHasDarkClass || htmlHasDarkClass;
-    
-    console.log('[CF Enhancer] Dark mode check:', {
-      bodyHasDarkMode,
-      htmlHasDarkMode,
-      localStorageDarkMode,
-      bodyHasDarkClass,
-      htmlHasDarkClass,
-      isDark
-    });
-    
-    return isDark;
+  async isDarkModeEnabled() {
+    try {
+      // Check if dark mode CSS is present
+      const darkModeStyle = document.getElementById('cf-enhancer-dark-mode');
+      if (darkModeStyle) {
+        console.log('[CF Enhancer] Dark mode detected via CSS element');
+        return true;
+      }
+      
+      // Check storage directly
+      if (typeof CFEnhancerStorage !== 'undefined') {
+        const options = await CFEnhancerStorage.getOptions(['darkMode'], false);
+        console.log('[CF Enhancer] Dark mode from storage:', options.darkMode);
+        return options.darkMode === true;
+      }
+      
+      // Fallback checks
+      const bodyHasDarkMode = document.body.classList.contains('cf-dark-mode');
+      const htmlHasDarkMode = document.documentElement.classList.contains('cf-dark-mode');
+      const localStorageDarkMode = localStorage.getItem('cf-dark-mode') === 'true';
+      const bodyHasDarkClass = document.body.classList.contains('dark-mode');
+      const htmlHasDarkClass = document.documentElement.classList.contains('dark-mode');
+      
+      const isDark = bodyHasDarkMode || htmlHasDarkMode || localStorageDarkMode || 
+                     bodyHasDarkClass || htmlHasDarkClass;
+      
+      console.log('[CF Enhancer] Dark mode fallback check:', {
+        darkModeStyle: !!darkModeStyle,
+        bodyHasDarkMode,
+        htmlHasDarkMode,
+        localStorageDarkMode,
+        bodyHasDarkClass,
+        htmlHasDarkClass,
+        isDark
+      });
+      
+      return isDark;
+    } catch (error) {
+      console.error('[CF Enhancer] Error checking dark mode:', error);
+      return false;
+    }
   }
 
   /**
    * Get theme-aware colors
    */
-  getThemeColors() {
-    const isDark = this.isDarkModeEnabled();
+  async getThemeColors() {
+    const isDark = await this.isDarkModeEnabled();
     return {
       background: isDark ? '#2d2d2d' : '#f8f8f8',
       border: isDark ? '#555' : '#ddd',
@@ -186,13 +205,13 @@ class RecommendedQuestionsFeature {
   /**
    * Add recommendations panel to the page
    */
-  addRecommendationsPanel() {
+  async addRecommendationsPanel() {
     // Check if panel already exists
     if (document.getElementById('cf-recommendations-panel')) {
       return;
     }
     
-    const colors = this.getThemeColors();
+    const colors = await this.getThemeColors();
     
     const panel = document.createElement('div');
     panel.id = 'cf-recommendations-panel';
@@ -283,7 +302,7 @@ class RecommendedQuestionsFeature {
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     
-    // Listen for localStorage changes
+    // Listen for storage changes
     window.addEventListener('storage', (e) => {
       if (e.key === 'cf-dark-mode') {
         console.log('[CF Enhancer] Storage change detected, updating theme');
@@ -291,10 +310,46 @@ class RecommendedQuestionsFeature {
       }
     });
     
+    // Listen for dark mode CSS changes (more reliable)
+    const headObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList') {
+          const addedNodes = Array.from(mutation.addedNodes);
+          const removedNodes = Array.from(mutation.removedNodes);
+          
+          // Check for dark mode CSS being added or removed
+          const darkModeStyleAdded = addedNodes.some(node => 
+            node.id === 'cf-enhancer-dark-mode' || 
+            (node.tagName === 'STYLE' && node.textContent && node.textContent.includes('cf-enhancer-dark-mode'))
+          );
+          
+          const darkModeStyleRemoved = removedNodes.some(node => 
+            node.id === 'cf-enhancer-dark-mode' || 
+            (node.tagName === 'STYLE' && node.textContent && node.textContent.includes('cf-enhancer-dark-mode'))
+          );
+          
+          if (darkModeStyleAdded || darkModeStyleRemoved) {
+            console.log('[CF Enhancer] Dark mode CSS change detected, updating theme');
+            setTimeout(() => this.updatePanelTheme(), 200);
+          }
+        }
+      });
+    });
+    
+    headObserver.observe(document.head, { childList: true, subtree: true });
+    
+    // Listen for dark mode toggle button clicks
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'cf-dark-mode-toggle') {
+        console.log('[CF Enhancer] Dark mode toggle clicked, updating theme');
+        setTimeout(() => this.updatePanelTheme(), 300);
+      }
+    });
+    
     // Also check periodically for theme changes (fallback)
     setInterval(() => {
       this.updatePanelTheme();
-    }, 2000);
+    }, 3000);
     
     console.log('[CF Enhancer] Dark mode listeners setup complete');
   }
@@ -302,12 +357,12 @@ class RecommendedQuestionsFeature {
   /**
    * Update panel theme when dark mode changes
    */
-  updatePanelTheme() {
+  async updatePanelTheme() {
     const panel = document.getElementById('cf-recommendations-panel');
     if (!panel) return;
     
-    const colors = this.getThemeColors();
-    const isDark = this.isDarkModeEnabled();
+    const colors = await this.getThemeColors();
+    const isDark = await this.isDarkModeEnabled();
     
     console.log('[CF Enhancer] Updating panel theme, isDark:', isDark, 'colors:', colors);
     
@@ -353,7 +408,7 @@ class RecommendedQuestionsFeature {
       // If recommendations are loaded, refresh them with new colors
       if (this.lastRecommendations && this.lastRecommendations.length > 0) {
         console.log('[CF Enhancer] Refreshing recommendations display with new theme');
-        this.displayRecommendations(this.lastRecommendations, contentDiv);
+        await this.displayRecommendations(this.lastRecommendations, contentDiv);
       }
     }
   }
@@ -376,11 +431,11 @@ class RecommendedQuestionsFeature {
       const recommendations = await this.getRecommendedProblems(targetRating, solvedProblems);
       
       // Display recommendations
-      this.displayRecommendations(recommendations, contentDiv);
+      await this.displayRecommendations(recommendations, contentDiv);
       
     } catch (error) {
       console.error('[CF Enhancer] Error loading recommendations:', error);
-      const colors = this.getThemeColors();
+      const colors = await this.getThemeColors();
       contentDiv.innerHTML = `
         <div style="text-align: center; padding: 20px; color: #d32f2f;">
           <div style="margin-bottom: 10px;">❌</div>
@@ -558,8 +613,8 @@ class RecommendedQuestionsFeature {
   /**
    * Display recommendations in the panel
    */
-  displayRecommendations(recommendations, contentDiv) {
-    const colors = this.getThemeColors();
+  async displayRecommendations(recommendations, contentDiv) {
+    const colors = await this.getThemeColors();
     
     if (recommendations.length === 0) {
       contentDiv.innerHTML = `
@@ -640,7 +695,7 @@ class RecommendedQuestionsFeature {
     const contentDiv = document.getElementById('cf-recommendations-content');
     if (!contentDiv) return;
     
-    const colors = this.getThemeColors();
+    const colors = await this.getThemeColors();
     
     // Show loading state
     contentDiv.innerHTML = `
@@ -660,6 +715,7 @@ class RecommendedQuestionsFeature {
       await this.loadRecommendations();
     } catch (error) {
       console.error('[CF Enhancer] Error in refreshRecommendations:', error);
+      const colors = await this.getThemeColors();
       contentDiv.innerHTML = `
         <div style="text-align: center; padding: 20px; color: #d32f2f;">
           <div style="margin-bottom: 10px;">❌</div>
