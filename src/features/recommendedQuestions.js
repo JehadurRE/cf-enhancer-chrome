@@ -13,6 +13,8 @@ class RecommendedQuestionsFeature {
     this.userRating = null;
     this.userHandle = null;
     this.apiBaseUrl = 'https://codeforces.com/api/';
+    this.cachedProblems = null; // Cache for problems to avoid repeated API calls
+    this.lastRecommendations = []; // Store last recommendations to avoid duplicates
     this.init();
   }
 
@@ -268,15 +270,26 @@ class RecommendedQuestionsFeature {
    */
   async getRecommendedProblems(targetRating, solvedProblems) {
     try {
-      const response = await fetch(`${this.apiBaseUrl}problemset.problems`);
-      const data = await response.json();
+      let problems, statistics;
       
-      if (data.status !== 'OK') {
-        throw new Error('API request failed');
+      // Use cached data if available, otherwise fetch from API
+      if (this.cachedProblems) {
+        problems = this.cachedProblems.problems;
+        statistics = this.cachedProblems.statistics;
+      } else {
+        const response = await fetch(`${this.apiBaseUrl}problemset.problems`);
+        const data = await response.json();
+        
+        if (data.status !== 'OK') {
+          throw new Error('API request failed');
+        }
+        
+        problems = data.result.problems;
+        statistics = data.result.problemStatistics;
+        
+        // Cache the data
+        this.cachedProblems = { problems, statistics };
       }
-      
-      const problems = data.result.problems;
-      const statistics = data.result.problemStatistics;
       
       // Create a map of problem statistics
       const statsMap = new Map();
@@ -328,10 +341,28 @@ class RecommendedQuestionsFeature {
             score
           };
         })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 10); // Top 10 recommendations
+        .sort((a, b) => b.score - a.score);
       
-      return candidates;
+      // Filter out recently shown problems to add variety
+      const lastRecommendationIds = new Set(this.lastRecommendations.map(p => `${p.contestId}${p.index}`));
+      const filteredCandidates = candidates.filter(problem => {
+        const problemId = `${problem.contestId}${problem.index}`;
+        return !lastRecommendationIds.has(problemId);
+      });
+      
+      // If we filtered out too many, use all candidates
+      const finalCandidates = filteredCandidates.length >= 10 ? filteredCandidates : candidates;
+      
+      // Shuffle the top recommendations to add variety
+      const topCandidates = finalCandidates.slice(0, 30); // Get top 30
+      this.shuffleArray(topCandidates);
+      
+      const selectedRecommendations = topCandidates.slice(0, 10); // Return top 10 after shuffle
+      
+      // Update last recommendations for next refresh
+      this.lastRecommendations = selectedRecommendations;
+      
+      return selectedRecommendations;
     } catch (error) {
       console.error('[CF Enhancer] Error fetching problems:', error);
       return [];
@@ -356,7 +387,7 @@ class RecommendedQuestionsFeature {
     let html = '<div style="max-height: 300px; overflow-y: auto;">';
     
     recommendations.forEach((problem, index) => {
-      const problemUrl = `https://codeforces.com/problem/${problem.contestId}/${problem.index}`;
+      const problemUrl = `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
       const difficultyColor = this.getRatingColor(problem.rating);
       
       html += `
@@ -389,7 +420,7 @@ class RecommendedQuestionsFeature {
     
     html += `
       <div style="margin-top: 10px; text-align: center;">
-        <button onclick="document.getElementById('cf-recommendations-panel').querySelector('#cf-recommendations-content').innerHTML = 'Loading...'; window.cfRecommendations.loadRecommendations();" 
+        <button onclick="window.cfRecommendations.refreshRecommendations();" 
                 style="background: #1976d2; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 11px;">
           🔄 Refresh
         </button>
@@ -400,6 +431,35 @@ class RecommendedQuestionsFeature {
     
     // Store reference for refresh functionality
     window.cfRecommendations = this;
+  }
+
+  /**
+   * Refresh recommendations
+   */
+  async refreshRecommendations() {
+    const contentDiv = document.getElementById('cf-recommendations-content');
+    if (!contentDiv) return;
+    
+    // Show loading state
+    contentDiv.innerHTML = `
+      <div style="text-align: center; padding: 20px; color: #666;">
+        <div style="margin-bottom: 10px;">⏳</div>
+        Loading new recommendations...
+      </div>
+    `;
+    
+    // Load fresh recommendations
+    await this.loadRecommendations();
+  }
+
+  /**
+   * Shuffle array using Fisher-Yates algorithm
+   */
+  shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
   }
 
   /**
