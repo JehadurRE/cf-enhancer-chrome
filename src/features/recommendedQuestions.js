@@ -15,6 +15,8 @@ class RecommendedQuestionsFeature {
     this.apiBaseUrl = 'https://codeforces.com/api/';
     this.cachedProblems = null; // Cache for problems to avoid repeated API calls
     this.lastRecommendations = []; // Store last recommendations to avoid duplicates
+    this.isUpdatingTheme = false; // Prevent infinite theme update loops
+    this.lastThemeState = null; // Track last theme state to avoid unnecessary updates
     this.init();
   }
 
@@ -148,14 +150,12 @@ class RecommendedQuestionsFeature {
       // Check if dark mode CSS is present
       const darkModeStyle = document.getElementById('cf-enhancer-dark-mode');
       if (darkModeStyle) {
-        console.log('[CF Enhancer] Dark mode detected via CSS element');
         return true;
       }
       
       // Check storage directly
       if (typeof CFEnhancerStorage !== 'undefined') {
         const options = await CFEnhancerStorage.getOptions(['darkMode'], false);
-        console.log('[CF Enhancer] Dark mode from storage:', options.darkMode);
         return options.darkMode === true;
       }
       
@@ -166,20 +166,8 @@ class RecommendedQuestionsFeature {
       const bodyHasDarkClass = document.body.classList.contains('dark-mode');
       const htmlHasDarkClass = document.documentElement.classList.contains('dark-mode');
       
-      const isDark = bodyHasDarkMode || htmlHasDarkMode || localStorageDarkMode || 
-                     bodyHasDarkClass || htmlHasDarkClass;
-      
-      console.log('[CF Enhancer] Dark mode fallback check:', {
-        darkModeStyle: !!darkModeStyle,
-        bodyHasDarkMode,
-        htmlHasDarkMode,
-        localStorageDarkMode,
-        bodyHasDarkClass,
-        htmlHasDarkClass,
-        isDark
-      });
-      
-      return isDark;
+      return bodyHasDarkMode || htmlHasDarkMode || localStorageDarkMode || 
+             bodyHasDarkClass || htmlHasDarkClass;
     } catch (error) {
       console.error('[CF Enhancer] Error checking dark mode:', error);
       return false;
@@ -289,67 +277,39 @@ class RecommendedQuestionsFeature {
   setupDarkModeListener() {
     console.log('[CF Enhancer] Setting up dark mode listeners');
     
-    // Listen for class changes on body and documentElement
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-          console.log('[CF Enhancer] Class mutation detected, updating theme');
-          setTimeout(() => this.updatePanelTheme(), 100);
-        }
-      });
-    });
-
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    
-    // Listen for storage changes
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'cf-dark-mode') {
-        console.log('[CF Enhancer] Storage change detected, updating theme');
-        setTimeout(() => this.updatePanelTheme(), 100);
-      }
-    });
-    
     // Listen for dark mode CSS changes (more reliable)
     const headObserver = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
-        if (mutation.type === 'childList') {
+        if (mutation.type === 'childList' && !this.isUpdatingTheme) {
           const addedNodes = Array.from(mutation.addedNodes);
           const removedNodes = Array.from(mutation.removedNodes);
           
           // Check for dark mode CSS being added or removed
           const darkModeStyleAdded = addedNodes.some(node => 
-            node.id === 'cf-enhancer-dark-mode' || 
-            (node.tagName === 'STYLE' && node.textContent && node.textContent.includes('cf-enhancer-dark-mode'))
+            node.id === 'cf-enhancer-dark-mode'
           );
           
           const darkModeStyleRemoved = removedNodes.some(node => 
-            node.id === 'cf-enhancer-dark-mode' || 
-            (node.tagName === 'STYLE' && node.textContent && node.textContent.includes('cf-enhancer-dark-mode'))
+            node.id === 'cf-enhancer-dark-mode'
           );
           
           if (darkModeStyleAdded || darkModeStyleRemoved) {
-            console.log('[CF Enhancer] Dark mode CSS change detected, updating theme');
+            console.log('[CF Enhancer] Dark mode CSS change detected');
             setTimeout(() => this.updatePanelTheme(), 200);
           }
         }
       });
     });
     
-    headObserver.observe(document.head, { childList: true, subtree: true });
+    headObserver.observe(document.head, { childList: true });
     
     // Listen for dark mode toggle button clicks
     document.addEventListener('click', (e) => {
-      if (e.target && e.target.id === 'cf-dark-mode-toggle') {
-        console.log('[CF Enhancer] Dark mode toggle clicked, updating theme');
+      if (e.target && e.target.id === 'cf-dark-mode-toggle' && !this.isUpdatingTheme) {
+        console.log('[CF Enhancer] Dark mode toggle clicked');
         setTimeout(() => this.updatePanelTheme(), 300);
       }
     });
-    
-    // Also check periodically for theme changes (fallback)
-    setInterval(() => {
-      this.updatePanelTheme();
-    }, 3000);
     
     console.log('[CF Enhancer] Dark mode listeners setup complete');
   }
@@ -358,58 +318,78 @@ class RecommendedQuestionsFeature {
    * Update panel theme when dark mode changes
    */
   async updatePanelTheme() {
+    // Prevent infinite loops
+    if (this.isUpdatingTheme) return;
+    
     const panel = document.getElementById('cf-recommendations-panel');
     if (!panel) return;
     
-    const colors = await this.getThemeColors();
-    const isDark = await this.isDarkModeEnabled();
+    this.isUpdatingTheme = true;
     
-    console.log('[CF Enhancer] Updating panel theme, isDark:', isDark, 'colors:', colors);
-    
-    // Update panel background and border with transition
-    panel.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
-    panel.style.backgroundColor = colors.background;
-    panel.style.borderColor = colors.border;
-    
-    // Update header text color
-    const header = panel.querySelector('h3');
-    if (header) {
-      header.style.transition = 'color 0.3s ease';
-      header.style.color = colors.text;
-    }
-    
-    // Update close button color
-    const closeBtn = panel.querySelector('#cf-recommendations-close');
-    if (closeBtn) {
-      closeBtn.style.transition = 'color 0.3s ease';
-      closeBtn.style.color = colors.mutedText;
-    }
-    
-    // Update rating text color
-    const ratingText = panel.querySelector('div:last-child');
-    if (ratingText) {
-      ratingText.style.transition = 'color 0.3s ease';
-      ratingText.style.color = colors.lightText;
-    }
-    
-    // Update content area background and text colors
-    const contentDiv = document.getElementById('cf-recommendations-content');
-    if (contentDiv) {
-      // Update all card backgrounds
-      const cards = contentDiv.querySelectorAll('div[style*="background"]');
-      cards.forEach(card => {
-        if (card.style.background.includes('#fff') || card.style.background.includes('#3d3d3d')) {
-          card.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
-          card.style.backgroundColor = colors.cardBackground;
-          card.style.borderColor = colors.cardBorder;
-        }
-      });
+    try {
+      const isDark = await this.isDarkModeEnabled();
       
-      // If recommendations are loaded, refresh them with new colors
-      if (this.lastRecommendations && this.lastRecommendations.length > 0) {
-        console.log('[CF Enhancer] Refreshing recommendations display with new theme');
-        await this.displayRecommendations(this.lastRecommendations, contentDiv);
+      // Check if theme actually changed
+      if (this.lastThemeState === isDark) {
+        this.isUpdatingTheme = false;
+        return;
       }
+      
+      console.log('[CF Enhancer] Updating panel theme, isDark:', isDark);
+      this.lastThemeState = isDark;
+      
+      const colors = await this.getThemeColors();
+      
+      // Update panel background and border with transition
+      panel.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
+      panel.style.backgroundColor = colors.background;
+      panel.style.borderColor = colors.border;
+      
+      // Update header text color
+      const header = panel.querySelector('h3');
+      if (header) {
+        header.style.transition = 'color 0.3s ease';
+        header.style.color = colors.text;
+      }
+      
+      // Update close button color
+      const closeBtn = panel.querySelector('#cf-recommendations-close');
+      if (closeBtn) {
+        closeBtn.style.transition = 'color 0.3s ease';
+        closeBtn.style.color = colors.mutedText;
+      }
+      
+      // Update rating text color
+      const ratingText = panel.querySelector('div:last-child');
+      if (ratingText) {
+        ratingText.style.transition = 'color 0.3s ease';
+        ratingText.style.color = colors.lightText;
+      }
+      
+      // Update content area background and text colors
+      const contentDiv = document.getElementById('cf-recommendations-content');
+      if (contentDiv) {
+        // Update all card backgrounds
+        const cards = contentDiv.querySelectorAll('div[style*="background"]');
+        cards.forEach(card => {
+          if (card.style.background.includes('#fff') || card.style.background.includes('#3d3d3d')) {
+            card.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
+            card.style.backgroundColor = colors.cardBackground;
+            card.style.borderColor = colors.cardBorder;
+          }
+        });
+        
+        // Only refresh recommendations display if there are recommendations loaded
+        // and we're not already in the middle of updating
+        if (this.lastRecommendations && this.lastRecommendations.length > 0) {
+          console.log('[CF Enhancer] Refreshing recommendations display with new theme');
+          await this.displayRecommendations(this.lastRecommendations, contentDiv);
+        }
+      }
+    } catch (error) {
+      console.error('[CF Enhancer] Error updating panel theme:', error);
+    } finally {
+      this.isUpdatingTheme = false;
     }
   }
 
@@ -614,7 +594,14 @@ class RecommendedQuestionsFeature {
    * Display recommendations in the panel
    */
   async displayRecommendations(recommendations, contentDiv) {
-    const colors = await this.getThemeColors();
+    // Prevent theme update loops when called from updatePanelTheme
+    const wasUpdatingTheme = this.isUpdatingTheme;
+    if (!wasUpdatingTheme) {
+      this.isUpdatingTheme = true;
+    }
+    
+    try {
+      const colors = await this.getThemeColors();
     
     if (recommendations.length === 0) {
       contentDiv.innerHTML = `
@@ -686,6 +673,13 @@ class RecommendedQuestionsFeature {
     
     // Store reference for refresh functionality
     window.cfRecommendations = this;
+    
+    } finally {
+      // Reset the flag if we set it
+      if (!wasUpdatingTheme) {
+        this.isUpdatingTheme = false;
+      }
+    }
   }
 
   /**
