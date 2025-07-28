@@ -143,6 +143,7 @@ class RatingPredictorFeature {
       const performanceHeader = document.createElement('th');
       performanceHeader.textContent = 'Performance';
       performanceHeader.title = 'Estimated performance rating';
+      performanceHeader.className = 'rating-predictor-header';
       performanceHeader.style.cssText = headerStyle;
       headerRow.appendChild(performanceHeader);
 
@@ -150,6 +151,7 @@ class RatingPredictorFeature {
       const predictedHeader = document.createElement('th');
       predictedHeader.textContent = 'Δ Predicted';
       predictedHeader.title = 'Our predicted rating change';
+      predictedHeader.className = 'rating-predictor-header';
       predictedHeader.style.cssText = headerStyle;
       headerRow.appendChild(predictedHeader);
 
@@ -157,6 +159,7 @@ class RatingPredictorFeature {
       const finalHeader = document.createElement('th');
       finalHeader.textContent = 'Δ Final';
       finalHeader.title = 'Actual rating change from Codeforces';
+      finalHeader.className = 'rating-predictor-header';
       finalHeader.style.cssText = headerStyle;
       headerRow.appendChild(finalHeader);
 
@@ -164,6 +167,7 @@ class RatingPredictorFeature {
       const rankHeader = document.createElement('th');
       rankHeader.textContent = 'Rank Change';
       rankHeader.title = 'Title/rank change (e.g., N→P, E→CM)';
+      rankHeader.className = 'rating-predictor-header';
       rankHeader.style.cssText = headerStyle;
       headerRow.appendChild(rankHeader);
     }
@@ -183,30 +187,38 @@ class RatingPredictorFeature {
       // Performance cell
       const performanceCell = document.createElement('td');
       performanceCell.id = `performance-${index}`;
+      performanceCell.className = 'rating-predictor-cell';
       performanceCell.style.cssText = cellStyle;
       performanceCell.textContent = 'Loading...';
+      performanceCell.setAttribute('data-rating-predictor', 'true');
       row.appendChild(performanceCell);
 
       // Predicted delta cell
       const predictedCell = document.createElement('td');
       predictedCell.id = `predicted-${index}`;
+      predictedCell.className = 'rating-predictor-cell';
       predictedCell.style.cssText = cellStyle;
       predictedCell.textContent = 'Loading...';
+      predictedCell.setAttribute('data-rating-predictor', 'true');
       row.appendChild(predictedCell);
 
       // Final delta cell (from CF)
       const finalCell = document.createElement('td');
       finalCell.id = `final-${index}`;
+      finalCell.className = 'rating-predictor-cell';
       finalCell.style.cssText = cellStyle;
       finalCell.textContent = 'TBD';
       finalCell.title = 'Will show actual CF rating change after contest';
+      finalCell.setAttribute('data-rating-predictor', 'true');
       row.appendChild(finalCell);
 
       // Rank change cell
       const rankChangeCell = document.createElement('td');
       rankChangeCell.id = `rank-change-${index}`;
+      rankChangeCell.className = 'rating-predictor-cell';
       rankChangeCell.style.cssText = cellStyle;
       rankChangeCell.textContent = 'Loading...';
+      rankChangeCell.setAttribute('data-rating-predictor', 'true');
       row.appendChild(rankChangeCell);
     });
   }

@@ -100,6 +100,14 @@ class ColorizeStandingsFeature {
       const title = cell.getAttribute('title');
       if (!title) return;
       
+      // Skip rating predictor columns
+      if (cell.hasAttribute('data-rating-predictor') || 
+          cell.classList.contains('rating-predictor-cell') ||
+          cell.classList.contains('rating-predictor-header')) {
+        console.log(`[CF Enhancer] Skipping rating predictor cell: "${title}"`);
+        return;
+      }
+      
       uniqueTitles.add(title);
       
       // Extract language from title
