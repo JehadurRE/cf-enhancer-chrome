@@ -4,7 +4,17 @@
  * 
  * Predicts rating changes for contest participants based on current standings
  * and displays them in the standings table
+ * 
+ * This implementation uses the accurate rating calculation algorithm adapted from 
+ * Carrot (https://github.com/meooow25/carrot) by meooow25, which itself is based 
+ * on the TLE implementation by algmyr and Mike Mirzayanov's original algorithm.
+ * 
+ * Credit: We gratefully acknowledge the excellent work by meooow25 in the Carrot 
+ * extension for providing an accurate rating prediction algorithm to the competitive 
+ * programming community.
  */
+
+import AccurateRatingCalculator from './accurateRatingCalculator.js';
 
 class RatingPredictorFeature {
   constructor() {
@@ -354,7 +364,7 @@ class RatingPredictorFeature {
   }
 
   /**
-   * Extract participant data from standings table
+   * Extract participant data from standings table with proper scoring information
    */
   extractParticipants() {
     const table = document.querySelector('.standings');
@@ -380,27 +390,54 @@ class RatingPredictorFeature {
           index: index
         };
         
-        // Extract solved problems count and penalty
+        // Extract points and penalty from the standings table
         const cells = row.querySelectorAll('td');
-        if (cells.length >= 4) {
-          const pointsCell = cells[cells.length - 2]; // Usually second to last
-          const points = this.parsePoints(pointsCell.textContent);
-          participantData.points = points;
+        
+        // Look for the total score column (usually near the end)
+        // Format is typically "points" or "points (penalty)"
+        for (let i = cells.length - 1; i >= 2; i--) {
+          const cellText = cells[i].textContent.trim();
+          
+          // Check if this looks like a total score cell
+          if (cellText.match(/^\d+(\s*\(\d+\))?$/) || cellText.match(/^\d+$/)) {
+            const scoreMatch = cellText.match(/^(\d+)(?:\s*\((\d+)\))?$/);
+            if (scoreMatch) {
+              participantData.points = parseInt(scoreMatch[1]) || 0;
+              participantData.penalty = parseInt(scoreMatch[2]) || 0;
+              break;
+            }
+          }
+        }
+        
+        // Fallback: if we didn't find points/penalty in the expected format
+        if (participantData.points === undefined) {
+          // Try to extract from hack/solved info or use rank-based estimation
+          participantData.points = Math.max(0, 100 - rank); // Simple fallback
+          participantData.penalty = 0;
         }
         
         participants.push(participantData);
       }
     });
     
+    console.log('[CF Enhancer] Extracted participants:', participants.slice(0, 5)); // Log first 5 for debugging
     return participants;
   }
 
   /**
-   * Parse points from standings cell
+   * Get rank title abbreviation from rating
    */
-  parsePoints(pointsText) {
-    const match = pointsText.match(/(\d+)/);
-    return match ? parseInt(match[1]) : 0;
+  getRankAbbreviation(rating) {
+    if (rating >= 3000) return 'LGM'; // Legendary Grandmaster
+    if (rating >= 2600) return 'IGM'; // International Grandmaster  
+    if (rating >= 2400) return 'GM';  // Grandmaster
+    if (rating >= 2300) return 'IM';  // International Master
+    if (rating >= 2100) return 'M';   // Master
+    if (rating >= 1900) return 'CM';  // Candidate Master
+    if (rating >= 1600) return 'E';   // Expert
+    if (rating >= 1400) return 'S';   // Specialist
+    if (rating >= 1200) return 'P';   // Pupil
+    return 'N'; // Newbie
   }
 
   /**
@@ -529,32 +566,30 @@ class RatingPredictorFeature {
   }
 
   /**
-   * Calculate rating changes using enhanced ELO-like system
+   * Calculate rating changes using accurate Codeforces algorithm
+   * Adapted from Carrot extension by meooow25
    */
   calculateRatingChanges(participants, ratings) {
-    const predictions = [];
-    const totalParticipants = participants.length;
+    console.log('[CF Enhancer] Using accurate rating calculation algorithm adapted from Carrot');
     
-    participants.forEach(participant => {
-      const currentRating = ratings.get(participant.handle) || 1200;
-      const rank = participant.rank;
-      
-      // Calculate expected rank based on current rating using more sophisticated approach
-      const expectedRank = this.calculateExpectedRank(participant, participants, ratings);
-      
-      // Calculate performance rating
-      const performance = this.calculatePerformanceRating(rank, totalParticipants, currentRating);
-      
-      // Calculate rating change with improved formula
-      const ratingChange = this.calculateRatingChange(
-        currentRating, 
-        rank, 
-        expectedRank, 
-        totalParticipants,
-        performance
-      );
-      
-      const newRating = currentRating + ratingChange;
+    // Prepare contestants data for the calculator
+    const contestants = participants.map(participant => ({
+      handle: participant.handle,
+      points: participant.points || 0,
+      penalty: participant.penalty || 0,
+      rating: ratings.get(participant.handle) || null
+    }));
+
+    // Use the accurate rating calculator
+    const calculator = new AccurateRatingCalculator();
+    const results = calculator.calculateRatingChanges(contestants);
+    
+    // Convert results to our format
+    const predictions = [];
+    results.forEach((result, index) => {
+      const participant = participants[index];
+      const currentRating = result.rating || 1400;
+      const newRating = currentRating + result.delta;
       
       // Calculate rank changes
       const currentRankTitle = this.getRankAbbreviation(currentRating);
@@ -562,14 +597,14 @@ class RatingPredictorFeature {
       const rankChange = currentRankTitle !== newRankTitle ? `${currentRankTitle}→${newRankTitle}` : currentRankTitle;
       
       predictions.push({
-        handle: participant.handle,
+        handle: result.handle,
         index: participant.index,
         currentRating: currentRating,
-        performance: performance,
-        ratingChange: ratingChange,
+        performance: result.performance,
+        ratingChange: result.delta,
         newRating: newRating,
-        expectedRank: expectedRank,
-        actualRank: rank,
+        expectedRank: result.rank, // Use calculated rank
+        actualRank: participant.rank,
         currentRankTitle: currentRankTitle,
         newRankTitle: newRankTitle,
         rankChange: rankChange
@@ -580,116 +615,19 @@ class RatingPredictorFeature {
   }
 
   /**
-   * Calculate performance rating based on rank and contest size
-   */
-  calculatePerformanceRating(rank, totalParticipants, currentRating) {
-    // Convert rank to percentile
-    const percentile = (totalParticipants - rank + 1) / totalParticipants;
-    
-    // Map percentile to performance rating
-    // This is based on statistical analysis of Codeforces rating system
-    let performance;
-    
-    if (percentile >= 0.95) {
-      performance = currentRating + 400 + Math.random() * 200; // Top 5%
-    } else if (percentile >= 0.85) {
-      performance = currentRating + 200 + Math.random() * 200; // Top 15%
-    } else if (percentile >= 0.70) {
-      performance = currentRating + 100 + Math.random() * 100; // Top 30%
-    } else if (percentile >= 0.50) {
-      performance = currentRating + Math.random() * 100 - 50; // Top 50%
-    } else if (percentile >= 0.30) {
-      performance = currentRating - 50 - Math.random() * 100; // Bottom 70%
-    } else if (percentile >= 0.15) {
-      performance = currentRating - 150 - Math.random() * 100; // Bottom 85%
-    } else {
-      performance = currentRating - 250 - Math.random() * 150; // Bottom 15%
-    }
-    
-    // Ensure reasonable bounds
-    return Math.max(800, Math.min(3500, Math.round(performance)));
-  }
-
-  /**
-   * Get rank title from rating
-   */
-  getRankTitle(rating) {
-    if (rating >= 2400) return 'IGM'; // International Grandmaster
-    if (rating >= 2300) return 'GM';  // Grandmaster
-    if (rating >= 2100) return 'IM';  // International Master
-    if (rating >= 1900) return 'M';   // Master
-    if (rating >= 1600) return 'E';   // Expert
-    if (rating >= 1400) return 'S';   // Specialist
-    if (rating >= 1200) return 'P';   // Pupil
-    return 'N'; // Newbie
-  }
-
-  /**
-   * Get rank title abbreviation
+   * Get rank title abbreviation from rating
    */
   getRankAbbreviation(rating) {
-    if (rating >= 2400) return 'IGM'; // International Grandmaster
-    if (rating >= 2300) return 'GM';  // Grandmaster  
-    if (rating >= 2100) return 'IM';  // International Master
-    if (rating >= 1900) return 'M';   // Master
+    if (rating >= 3000) return 'LGM'; // Legendary Grandmaster
+    if (rating >= 2600) return 'IGM'; // International Grandmaster  
+    if (rating >= 2400) return 'GM';  // Grandmaster
+    if (rating >= 2300) return 'IM';  // International Master
+    if (rating >= 2100) return 'M';   // Master
+    if (rating >= 1900) return 'CM';  // Candidate Master
     if (rating >= 1600) return 'E';   // Expert
     if (rating >= 1400) return 'S';   // Specialist
     if (rating >= 1200) return 'P';   // Pupil
     return 'N'; // Newbie
-  }
-
-  /**
-   * Calculate expected rank based on ratings
-   */
-  calculateExpectedRank(participant, participants, ratings) {
-    const myRating = ratings.get(participant.handle) || 1200;
-    let expectedRank = 1;
-    
-    participants.forEach(other => {
-      if (other.handle !== participant.handle) {
-        const otherRating = ratings.get(other.handle) || 1200;
-        const probability = 1.0 / (1.0 + Math.pow(10, (otherRating - myRating) / 400.0));
-        expectedRank += (1 - probability);
-      }
-    });
-    
-    return Math.round(expectedRank);
-  }
-
-  /**
-   * Calculate rating change with improved algorithm using performance
-   */
-  calculateRatingChange(currentRating, actualRank, expectedRank, totalParticipants, performance) {
-    // Base rating change factor (K-factor)
-    let K = 32;
-    
-    // Adjust K based on rating (higher rated players have smaller changes)
-    if (currentRating >= 2400) K = 16;
-    else if (currentRating >= 2100) K = 20;
-    else if (currentRating >= 1900) K = 24;
-    else if (currentRating >= 1600) K = 32;
-    else if (currentRating >= 1400) K = 36;
-    else K = 40;
-    
-    // Calculate rating change based on performance vs current rating
-    const performanceDelta = performance - currentRating;
-    let ratingChange = performanceDelta * 0.25; // 25% of performance difference
-    
-    // Apply K-factor
-    ratingChange = ratingChange * (K / 32);
-    
-    // Apply rank-based adjustment
-    const rankDifference = expectedRank - actualRank;
-    const rankBonus = rankDifference * 2; // Bonus/penalty for rank difference
-    ratingChange += rankBonus;
-    
-    // Contest size factor (larger contests have more stable ratings)
-    const sizeFactor = Math.min(1.2, Math.sqrt(200.0 / totalParticipants));
-    ratingChange *= sizeFactor;
-    
-    // Apply final bounds and rounding
-    ratingChange = Math.max(-200, Math.min(200, ratingChange));
-    return Math.round(ratingChange);
   }
 
   /**

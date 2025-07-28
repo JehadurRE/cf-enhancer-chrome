@@ -22,7 +22,7 @@
          "run_at": "document_idle"
       },
       {
-         "js": ["utils/storage.js", "utils/errorHandler.js", "features/colorizeStandings.js", "features/ratingPredictor.js"],
+         "js": ["utils/storage.js", "utils/errorHandler.js", "features/accurateRatingCalculator.js", "features/colorizeStandings.js", "features/ratingPredictor.js"],
          "matches": [
             "https://codeforces.com/contest/*/standings*", 
             "https://www.codeforces.com/contest/*/standings*",

@@ -27,6 +27,7 @@
       "js": [
         "utils/storage.js",
         "utils/errorHandler.js",
+        "features/accurateRatingCalculator.js",
         "features/colorizeStandings.js",
         "features/ratingPredictor.js"
       ],
