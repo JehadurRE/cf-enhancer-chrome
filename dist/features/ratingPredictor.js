@@ -17,6 +17,7 @@ class RatingPredictorFeature {
     this.lastUpdate = 0;
     this.updateInterval = 30000; // 30 seconds
     this.isLiveContest = this.checkIfLiveContest();
+    this.isContestFinalized = this.checkIfContestFinalized();
     
     this.init();
   }
@@ -78,12 +79,102 @@ class RatingPredictorFeature {
   }
 
   /**
+   * Check if contest has ended and ratings are finalized
+   */
+  checkIfContestFinalized() {
+    // Check various indicators that contest has ended
+    const contestPhase = document.querySelector('.contest-state-phase');
+    if (contestPhase) {
+      const phaseText = contestPhase.textContent.toLowerCase();
+      if (phaseText.includes('finished') || phaseText.includes('ended') || phaseText.includes('over')) {
+        return true;
+      }
+    }
+
+    // Check if there's a "Contest is over" message
+    const contestStatus = document.querySelector('.contest-state');
+    if (contestStatus) {
+      const statusText = contestStatus.textContent.toLowerCase();
+      if (statusText.includes('finished') || statusText.includes('ended') || statusText.includes('over')) {
+        return true;
+      }
+    }
+
+    // Check for contest duration indicators
+    const titleElement = document.querySelector('title');
+    if (titleElement && titleElement.textContent.includes('Contest') && !titleElement.textContent.includes('Virtual')) {
+      // Look for time indicators that suggest contest is over
+      const timeElements = document.querySelectorAll('.countdown, .contest-duration');
+      for (const elem of timeElements) {
+        const text = elem.textContent.toLowerCase();
+        if (text.includes('finished') || text.includes('ended') || text.includes('ago')) {
+          return true;
+        }
+      }
+    }
+
+    // Check if rating changes are visible in the standings
+    const ratingChanges = document.querySelectorAll('span[title*="rating"], span[title*="Rating"]');
+    if (ratingChanges.length > 0) {
+      // Check if any of these contain actual rating change values
+      for (const elem of ratingChanges) {
+        if (elem.textContent.match(/[+-]\d+/) || elem.title.match(/[+-]\d+/)) {
+          return true;
+        }
+      }
+    }
+
+    // Check for any elements that indicate rating changes
+    const standingsTable = document.querySelector('.standings');
+    if (standingsTable) {
+      // Look for rating change patterns in the table
+      const allText = standingsTable.textContent;
+      const ratingChangePattern = /[+-]\d{1,3}/g;
+      const matches = allText.match(ratingChangePattern);
+      
+      if (matches && matches.length > 3) { // Multiple rating changes suggest finalized contest
+        return true;
+      }
+
+      // Look for bold spans that might contain rating changes
+      const boldElements = standingsTable.querySelectorAll('span[style*="font-weight:bold"], b, strong');
+      for (const elem of boldElements) {
+        if (elem.textContent.match(/^[+-]\d+$/)) {
+          return true;
+        }
+      }
+    }
+    
+    // Check URL for past contest indicators
+    const url = window.location.href;
+    if (url.includes('/contest/') && !url.includes('/virtual/')) {
+      // If we're not in a virtual contest and can't find running indicators, it might be finished
+      const runningIndicators = document.querySelectorAll('.countdown:not(:empty)');
+      if (runningIndicators.length === 0) {
+        // Check if contest was recent (heuristic)
+        const currentTime = Date.now();
+        const contestMatch = url.match(/\/contest\/(\d+)/);
+        if (contestMatch) {
+          const contestId = parseInt(contestMatch[1]);
+          // Recent contest IDs are likely finished if no running indicators
+          if (contestId > 1000) { // Reasonable threshold for active contests
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
    * Setup rating predictor functionality
    */
   async setupRatingPredictor(enabled) {
     if (!enabled || !this.contestId) return;
 
     console.log('[CF Enhancer] Setting up rating predictor for contest:', this.contestId);
+    console.log('[CF Enhancer] Contest status - Live:', this.isLiveContest, 'Finalized:', this.isContestFinalized);
     
     // Wait for the standings table to load
     await this.waitForStandingsTable();
@@ -94,9 +185,14 @@ class RatingPredictorFeature {
     // Calculate and display initial predictions
     await this.updateRatingPredictions();
     
-    // Set up periodic updates for live contests
+    // Set up periodic updates for live contests, or one-time update for finalized contests
     if (this.isLiveContest) {
       this.setupLiveUpdates();
+    } else if (this.isContestFinalized) {
+      // For finalized contests, try to get actual rating changes after a short delay
+      setTimeout(() => {
+        this.updateRatingPredictions();
+      }, 2000);
     }
 
     console.log('[CF Enhancer] Rating predictor setup complete');
@@ -239,11 +335,14 @@ class RatingPredictorFeature {
       // Get current ratings for participants
       const ratings = await this.fetchParticipantRatings(participants);
       
+      // Get actual rating changes if contest is finalized
+      const actualChanges = this.extractActualRatingChanges(participants);
+      
       // Calculate rating changes
       const predictions = this.calculateRatingChanges(participants, ratings);
       
-      // Update UI
-      this.displayRatingChanges(predictions);
+      // Update UI with both predictions and actual changes
+      this.displayRatingChanges(predictions, actualChanges);
       
       this.lastUpdate = Date.now();
       console.log('[CF Enhancer] Rating predictions updated successfully');
@@ -305,8 +404,71 @@ class RatingPredictorFeature {
   }
 
   /**
-   * Fetch current ratings for participants
+   * Extract actual rating changes from finalized contest standings
    */
+  extractActualRatingChanges(participants) {
+    const actualChanges = new Map();
+    
+    if (!this.checkIfContestFinalized()) {
+      return actualChanges;
+    }
+
+    const standingsTable = document.querySelector('.standings');
+    if (!standingsTable) {
+      return actualChanges;
+    }
+
+    // Look for rating changes in various possible formats
+    participants.forEach(participant => {
+      const handle = participant.handle;
+      
+      // Method 1: Look for rating change spans near the participant's row
+      const participantLinks = standingsTable.querySelectorAll('a[href*="/profile/"]');
+      
+      for (const link of participantLinks) {
+        if (link.textContent.trim() === handle) {
+          const row = link.closest('tr');
+          if (row) {
+            // Look for rating change elements in the row
+            const ratingElements = row.querySelectorAll('span, div, td');
+            
+            for (const elem of ratingElements) {
+              const text = elem.textContent.trim();
+              const match = text.match(/([+-]\d+)/);
+              
+              if (match) {
+                const change = parseInt(match[1]);
+                // Validate it's a reasonable rating change
+                if (Math.abs(change) <= 500) {
+                  actualChanges.set(handle, change);
+                  break;
+                }
+              }
+            }
+            
+            // Also check title attributes
+            const elementsWithTitle = row.querySelectorAll('[title*="rating"]');
+            for (const elem of elementsWithTitle) {
+              const title = elem.title;
+              const match = title.match(/([+-]\d+)/);
+              
+              if (match) {
+                const change = parseInt(match[1]);
+                if (Math.abs(change) <= 500) {
+                  actualChanges.set(handle, change);
+                  break;
+                }
+              }
+            }
+          }
+          break;
+        }
+      }
+    });
+
+    console.log('[CF Enhancer] Extracted actual rating changes:', actualChanges);
+    return actualChanges;
+  }
   async fetchParticipantRatings(participants) {
     const ratings = new Map();
     
@@ -533,7 +695,7 @@ class RatingPredictorFeature {
   /**
    * Display rating changes in the four new columns
    */
-  displayRatingChanges(predictions) {
+  displayRatingChanges(predictions, actualChanges = new Map()) {
     predictions.forEach(prediction => {
       // Performance column
       const performanceCell = document.getElementById(`performance-${prediction.index}`);
@@ -586,12 +748,52 @@ class RatingPredictorFeature {
       // Final delta column (Codeforces actual)
       const finalCell = document.getElementById(`final-${prediction.index}`);
       if (finalCell) {
-        // This will be populated with actual CF data when available
-        finalCell.textContent = 'TBD';
-        finalCell.title = 'Actual rating change from Codeforces (available after contest ends)';
-        finalCell.style.color = '#6c757d';
-        finalCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
-        finalCell.style.fontStyle = 'italic';
+        const actualChange = actualChanges.get(prediction.handle);
+        
+        if (actualChange !== undefined) {
+          // Show actual rating change from Codeforces
+          const changeText = actualChange > 0 ? `+${actualChange}` : `${actualChange}`;
+          finalCell.textContent = changeText;
+          finalCell.title = `Actual rating change from Codeforces: ${changeText}`;
+          finalCell.style.fontStyle = 'normal';
+          finalCell.style.fontWeight = 'bold';
+          
+          // Color code the actual change
+          if (actualChange > 0) {
+            finalCell.style.color = '#28a745';
+            finalCell.style.backgroundColor = 'rgba(40, 167, 69, 0.15)';
+          } else if (actualChange < 0) {
+            finalCell.style.color = '#dc3545';
+            finalCell.style.backgroundColor = 'rgba(220, 53, 69, 0.15)';
+          } else {
+            finalCell.style.color = '#6c757d';
+            finalCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
+          }
+          
+          // Add comparison with prediction
+          const predictionDiff = Math.abs(actualChange - prediction.ratingChange);
+          if (predictionDiff <= 10) {
+            finalCell.title += ` (Prediction accuracy: Excellent ±${predictionDiff})`;
+          } else if (predictionDiff <= 25) {
+            finalCell.title += ` (Prediction accuracy: Good ±${predictionDiff})`;
+          } else if (predictionDiff <= 50) {
+            finalCell.title += ` (Prediction accuracy: Fair ±${predictionDiff})`;
+          } else {
+            finalCell.title += ` (Prediction accuracy: Poor ±${predictionDiff})`;
+          }
+        } else {
+          // Contest not finalized yet or data not available
+          if (this.isContestFinalized) {
+            finalCell.textContent = 'N/A';
+            finalCell.title = 'Rating change not found - may not be available yet';
+          } else {
+            finalCell.textContent = 'TBD';
+            finalCell.title = 'Actual rating change from Codeforces (available after contest ends)';
+          }
+          finalCell.style.color = '#6c757d';
+          finalCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
+          finalCell.style.fontStyle = 'italic';
+        }
       }
 
       // Rank change column
