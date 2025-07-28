@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Codeforces Enhancer by JehadurRE",
   "short_name": "CF Enhancer",
-  "version": "2.0.250725",
-  "description": "Enhanced Codeforces experience: multiple ratings graph, colorized standings, hide/show solved problems. Modern rebuild by JehadurRE, original concept by agul.",
+  "version": "2.0.250729",
+  "description": "Enhanced Codeforces experience: multiple ratings graph, colorized standings, rating predictor, hide/show solved problems. Modern rebuild by JehadurRE, original concept by agul.",
   "author": "JehadurRE",
   "icons": {
     "16": "logo_16x16.png",
@@ -27,7 +27,8 @@
       "js": [
         "utils/storage.js",
         "utils/errorHandler.js",
-        "features/colorizeStandings.js"
+        "features/colorizeStandings.js",
+        "features/ratingPredictor.js"
       ],
       "matches": [
         "https://codeforces.com/contest/*/standings*",
@@ -96,5 +97,5 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self';"
   },
-  "version_name": "v2.0.250725 (Built 2025-07-24)"
+  "version_name": "v2.0.250729 (Built 2025-07-28)"
 }

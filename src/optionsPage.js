@@ -14,6 +14,7 @@ class OptionsPageManager {
       showAttempts: { element: null, value: true },
       hideSolved: { element: null, value: true },
       darkMode: { element: null, value: false },
+      ratingPredictor: { element: null, value: true },
       recommendedQuestions: { element: null, value: true }
     };
 
@@ -53,6 +54,7 @@ class OptionsPageManager {
     this.options.showAttempts.element = document.getElementById('showAttemptsToggle');
     this.options.hideSolved.element = document.getElementById('hideSolvedToggle');
     this.options.darkMode.element = document.getElementById('darkModeToggle');
+    this.options.ratingPredictor.element = document.getElementById('ratingPredictorToggle');
     this.options.recommendedQuestions.element = document.getElementById('recommendedQuestionsToggle');
 
     // Verify all elements exist

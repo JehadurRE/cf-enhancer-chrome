@@ -13,6 +13,10 @@ class RecommendedQuestionsFeature {
     this.userRating = null;
     this.userHandle = null;
     this.apiBaseUrl = 'https://codeforces.com/api/';
+    this.cachedProblems = null; // Cache for problems to avoid repeated API calls
+    this.lastRecommendations = []; // Store last recommendations to avoid duplicates
+    this.isUpdatingTheme = false; // Prevent infinite theme update loops
+    this.lastThemeState = null; // Track last theme state to avoid unnecessary updates
     this.init();
   }
 
@@ -63,7 +67,7 @@ class RecommendedQuestionsFeature {
       
       if (this.userHandle) {
         // Add recommendations panel
-        this.addRecommendationsPanel();
+        await this.addRecommendationsPanel();
         
         // Load and display recommendations
         await this.loadRecommendations();
@@ -72,6 +76,23 @@ class RecommendedQuestionsFeature {
       }
     } catch (error) {
       console.error('[CF Enhancer] Error in executeRecommendations:', error);
+    }
+  }
+
+  /**
+   * Fetch with timeout
+   */
+  async fetchWithTimeout(url, timeout = 10000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
   }
 
@@ -107,7 +128,7 @@ class RecommendedQuestionsFeature {
     if (this.userHandle) {
       try {
         // Get user rating from API
-        const response = await fetch(`${this.apiBaseUrl}user.info?handles=${this.userHandle}`);
+        const response = await this.fetchWithTimeout(`${this.apiBaseUrl}user.info?handles=${this.userHandle}`);
         const data = await response.json();
         
         if (data.status === 'OK' && data.result.length > 0) {
@@ -122,13 +143,63 @@ class RecommendedQuestionsFeature {
   }
 
   /**
+   * Check if dark mode is enabled
+   */
+  async isDarkModeEnabled() {
+    try {
+      // Check if dark mode CSS is present
+      const darkModeStyle = document.getElementById('cf-enhancer-dark-mode');
+      if (darkModeStyle) {
+        return true;
+      }
+      
+      // Check storage directly
+      if (typeof CFEnhancerStorage !== 'undefined') {
+        const options = await CFEnhancerStorage.getOptions(['darkMode'], false);
+        return options.darkMode === true;
+      }
+      
+      // Fallback checks
+      const bodyHasDarkMode = document.body.classList.contains('cf-dark-mode');
+      const htmlHasDarkMode = document.documentElement.classList.contains('cf-dark-mode');
+      const localStorageDarkMode = localStorage.getItem('cf-dark-mode') === 'true';
+      const bodyHasDarkClass = document.body.classList.contains('dark-mode');
+      const htmlHasDarkClass = document.documentElement.classList.contains('dark-mode');
+      
+      return bodyHasDarkMode || htmlHasDarkMode || localStorageDarkMode || 
+             bodyHasDarkClass || htmlHasDarkClass;
+    } catch (error) {
+      console.error('[CF Enhancer] Error checking dark mode:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get theme-aware colors
+   */
+  async getThemeColors() {
+    const isDark = await this.isDarkModeEnabled();
+    return {
+      background: isDark ? '#2d2d2d' : '#f8f8f8',
+      border: isDark ? '#555' : '#ddd',
+      text: isDark ? '#e0e0e0' : '#333',
+      cardBackground: isDark ? '#3d3d3d' : '#fff',
+      cardBorder: isDark ? '#555' : '#eee',
+      mutedText: isDark ? '#aaa' : '#666',
+      lightText: isDark ? '#888' : '#888'
+    };
+  }
+
+  /**
    * Add recommendations panel to the page
    */
-  addRecommendationsPanel() {
+  async addRecommendationsPanel() {
     // Check if panel already exists
     if (document.getElementById('cf-recommendations-panel')) {
       return;
     }
+    
+    const colors = await this.getThemeColors();
     
     const panel = document.createElement('div');
     panel.id = 'cf-recommendations-panel';
@@ -138,8 +209,8 @@ class RecommendedQuestionsFeature {
       right: 10px;
       width: 300px;
       max-height: 400px;
-      background: #f8f8f8;
-      border: 1px solid #ddd;
+      background: ${colors.background};
+      border: 1px solid ${colors.border};
       border-radius: 8px;
       padding: 15px;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -151,16 +222,24 @@ class RecommendedQuestionsFeature {
     
     panel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h3 style="margin: 0; color: #333; font-size: 14px;">📚 Recommended Problems</h3>
-        <button id="cf-recommendations-close" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">×</button>
+        <h3 style="margin: 0; color: ${colors.text}; font-size: 14px;">📚 Recommended Problems</h3>
+        <button id="cf-recommendations-close" style="background: none; border: none; font-size: 16px; cursor: pointer; color: ${colors.mutedText};">×</button>
       </div>
       <div id="cf-recommendations-content">
-        <div style="text-align: center; padding: 20px; color: #666;">
-          <div style="margin-bottom: 10px;">⏳</div>
+        <div style="text-align: center; padding: 20px; color: ${colors.mutedText};">
+          <div style="margin-bottom: 10px;">
+            <div style="border: 2px solid ${colors.border}; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+            <style>
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+            </style>
+          </div>
           Loading recommendations...
         </div>
       </div>
-      <div style="margin-top: 10px; font-size: 11px; color: #888; text-align: center;">
+      <div style="margin-top: 10px; font-size: 11px; color: ${colors.lightText}; text-align: center;">
         Based on your rating: ${this.userRating || 'Unknown'}
       </div>
     `;
@@ -187,6 +266,131 @@ class RecommendedQuestionsFeature {
     
     document.body.appendChild(panel);
     console.log('[CF Enhancer] Recommendations panel added');
+    
+    // Listen for dark mode changes
+    this.setupDarkModeListener();
+  }
+
+  /**
+   * Setup listener for dark mode changes
+   */
+  setupDarkModeListener() {
+    console.log('[CF Enhancer] Setting up dark mode listeners');
+    
+    // Listen for dark mode CSS changes (more reliable)
+    const headObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' && !this.isUpdatingTheme) {
+          const addedNodes = Array.from(mutation.addedNodes);
+          const removedNodes = Array.from(mutation.removedNodes);
+          
+          // Check for dark mode CSS being added or removed
+          const darkModeStyleAdded = addedNodes.some(node => 
+            node.id === 'cf-enhancer-dark-mode'
+          );
+          
+          const darkModeStyleRemoved = removedNodes.some(node => 
+            node.id === 'cf-enhancer-dark-mode'
+          );
+          
+          if (darkModeStyleAdded || darkModeStyleRemoved) {
+            console.log('[CF Enhancer] Dark mode CSS change detected');
+            setTimeout(() => this.updatePanelTheme(), 200);
+          }
+        }
+      });
+    });
+    
+    headObserver.observe(document.head, { childList: true });
+    
+    // Listen for dark mode toggle button clicks
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'cf-dark-mode-toggle' && !this.isUpdatingTheme) {
+        console.log('[CF Enhancer] Dark mode toggle clicked');
+        setTimeout(() => this.updatePanelTheme(), 300);
+      }
+    });
+    
+    console.log('[CF Enhancer] Dark mode listeners setup complete');
+  }
+
+  /**
+   * Update panel theme when dark mode changes
+   */
+  async updatePanelTheme() {
+    // Prevent infinite loops
+    if (this.isUpdatingTheme) return;
+    
+    const panel = document.getElementById('cf-recommendations-panel');
+    if (!panel) return;
+    
+    this.isUpdatingTheme = true;
+    
+    try {
+      const isDark = await this.isDarkModeEnabled();
+      
+      // Check if theme actually changed
+      if (this.lastThemeState === isDark) {
+        this.isUpdatingTheme = false;
+        return;
+      }
+      
+      console.log('[CF Enhancer] Updating panel theme, isDark:', isDark);
+      this.lastThemeState = isDark;
+      
+      const colors = await this.getThemeColors();
+      
+      // Update panel background and border with transition
+      panel.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
+      panel.style.backgroundColor = colors.background;
+      panel.style.borderColor = colors.border;
+      
+      // Update header text color
+      const header = panel.querySelector('h3');
+      if (header) {
+        header.style.transition = 'color 0.3s ease';
+        header.style.color = colors.text;
+      }
+      
+      // Update close button color
+      const closeBtn = panel.querySelector('#cf-recommendations-close');
+      if (closeBtn) {
+        closeBtn.style.transition = 'color 0.3s ease';
+        closeBtn.style.color = colors.mutedText;
+      }
+      
+      // Update rating text color
+      const ratingText = panel.querySelector('div:last-child');
+      if (ratingText) {
+        ratingText.style.transition = 'color 0.3s ease';
+        ratingText.style.color = colors.lightText;
+      }
+      
+      // Update content area background and text colors
+      const contentDiv = document.getElementById('cf-recommendations-content');
+      if (contentDiv) {
+        // Update all card backgrounds
+        const cards = contentDiv.querySelectorAll('div[style*="background"]');
+        cards.forEach(card => {
+          if (card.style.background.includes('#fff') || card.style.background.includes('#3d3d3d')) {
+            card.style.transition = 'background-color 0.3s ease, border-color 0.3s ease';
+            card.style.backgroundColor = colors.cardBackground;
+            card.style.borderColor = colors.cardBorder;
+          }
+        });
+        
+        // Only refresh recommendations display if there are recommendations loaded
+        // and we're not already in the middle of updating
+        if (this.lastRecommendations && this.lastRecommendations.length > 0) {
+          console.log('[CF Enhancer] Refreshing recommendations display with new theme');
+          await this.displayRecommendations(this.lastRecommendations, contentDiv);
+        }
+      }
+    } catch (error) {
+      console.error('[CF Enhancer] Error updating panel theme:', error);
+    } finally {
+      this.isUpdatingTheme = false;
+    }
   }
 
   /**
@@ -207,16 +411,35 @@ class RecommendedQuestionsFeature {
       const recommendations = await this.getRecommendedProblems(targetRating, solvedProblems);
       
       // Display recommendations
-      this.displayRecommendations(recommendations, contentDiv);
+      await this.displayRecommendations(recommendations, contentDiv);
       
     } catch (error) {
       console.error('[CF Enhancer] Error loading recommendations:', error);
+      const colors = await this.getThemeColors();
       contentDiv.innerHTML = `
         <div style="text-align: center; padding: 20px; color: #d32f2f;">
           <div style="margin-bottom: 10px;">❌</div>
-          Error loading recommendations
+          Error loading recommendations<br>
+          <span style="font-size: 11px; color: ${colors.mutedText};">Check your internet connection</span>
+          <div style="margin-top: 10px;">
+            <button id="cf-retry-btn" 
+                    style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
+              🔄 Try Again
+            </button>
+          </div>
         </div>
       `;
+      
+      // Add event listener for retry button
+      setTimeout(() => {
+        const retryBtn = document.getElementById('cf-retry-btn');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            console.log('[CF Enhancer] Retry button clicked');
+            this.refreshRecommendations();
+          });
+        }
+      }, 100);
     }
   }
 
@@ -227,7 +450,7 @@ class RecommendedQuestionsFeature {
     if (!this.userHandle) return new Set();
     
     try {
-      const response = await fetch(`${this.apiBaseUrl}user.status?handle=${this.userHandle}&from=1&count=1000`);
+      const response = await this.fetchWithTimeout(`${this.apiBaseUrl}user.status?handle=${this.userHandle}&from=1&count=1000`);
       const data = await response.json();
       
       const solvedProblems = new Set();
@@ -268,15 +491,26 @@ class RecommendedQuestionsFeature {
    */
   async getRecommendedProblems(targetRating, solvedProblems) {
     try {
-      const response = await fetch(`${this.apiBaseUrl}problemset.problems`);
-      const data = await response.json();
+      let problems, statistics;
       
-      if (data.status !== 'OK') {
-        throw new Error('API request failed');
+      // Use cached data if available, otherwise fetch from API
+      if (this.cachedProblems) {
+        problems = this.cachedProblems.problems;
+        statistics = this.cachedProblems.statistics;
+      } else {
+        const response = await this.fetchWithTimeout(`${this.apiBaseUrl}problemset.problems`);
+        const data = await response.json();
+        
+        if (data.status !== 'OK') {
+          throw new Error('API request failed');
+        }
+        
+        problems = data.result.problems;
+        statistics = data.result.problemStatistics;
+        
+        // Cache the data
+        this.cachedProblems = { problems, statistics };
       }
-      
-      const problems = data.result.problems;
-      const statistics = data.result.problemStatistics;
       
       // Create a map of problem statistics
       const statsMap = new Map();
@@ -328,10 +562,28 @@ class RecommendedQuestionsFeature {
             score
           };
         })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 10); // Top 10 recommendations
+        .sort((a, b) => b.score - a.score);
       
-      return candidates;
+      // Filter out recently shown problems to add variety
+      const lastRecommendationIds = new Set(this.lastRecommendations.map(p => `${p.contestId}${p.index}`));
+      const filteredCandidates = candidates.filter(problem => {
+        const problemId = `${problem.contestId}${problem.index}`;
+        return !lastRecommendationIds.has(problemId);
+      });
+      
+      // If we filtered out too many, use all candidates
+      const finalCandidates = filteredCandidates.length >= 10 ? filteredCandidates : candidates;
+      
+      // Shuffle the top recommendations to add variety
+      const topCandidates = finalCandidates.slice(0, 30); // Get top 30
+      this.shuffleArray(topCandidates);
+      
+      const selectedRecommendations = topCandidates.slice(0, 10); // Return top 10 after shuffle
+      
+      // Update last recommendations for next refresh
+      this.lastRecommendations = selectedRecommendations;
+      
+      return selectedRecommendations;
     } catch (error) {
       console.error('[CF Enhancer] Error fetching problems:', error);
       return [];
@@ -341,10 +593,19 @@ class RecommendedQuestionsFeature {
   /**
    * Display recommendations in the panel
    */
-  displayRecommendations(recommendations, contentDiv) {
+  async displayRecommendations(recommendations, contentDiv) {
+    // Prevent theme update loops when called from updatePanelTheme
+    const wasUpdatingTheme = this.isUpdatingTheme;
+    if (!wasUpdatingTheme) {
+      this.isUpdatingTheme = true;
+    }
+    
+    try {
+      const colors = await this.getThemeColors();
+    
     if (recommendations.length === 0) {
       contentDiv.innerHTML = `
-        <div style="text-align: center; padding: 20px; color: #666;">
+        <div style="text-align: center; padding: 20px; color: ${colors.mutedText};">
           <div style="margin-bottom: 10px;">🤔</div>
           No recommendations found.<br>
           Try solving more problems!
@@ -356,28 +617,31 @@ class RecommendedQuestionsFeature {
     let html = '<div style="max-height: 300px; overflow-y: auto;">';
     
     recommendations.forEach((problem, index) => {
-      const problemUrl = `https://codeforces.com/problem/${problem.contestId}/${problem.index}`;
+      const problemUrl = `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
       const difficultyColor = this.getRatingColor(problem.rating);
+      const linkColor = colors.background === '#2d2d2d' ? '#64b5f6' : '#0066cc';
       
       html += `
-        <div style="margin-bottom: 8px; padding: 8px; background: #fff; border: 1px solid #eee; border-radius: 4px;">
+        <div style="margin-bottom: 8px; padding: 8px; background: ${colors.cardBackground}; border: 1px solid ${colors.cardBorder}; border-radius: 4px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
             <div style="flex: 1;">
-              <a href="${problemUrl}" target="_blank" style="color: #0066cc; text-decoration: none; font-weight: bold; font-size: 12px;">
+              <a href="${problemUrl}" target="_blank" style="color: ${linkColor}; text-decoration: none; font-weight: bold; font-size: 12px;">
                 ${problem.contestId}${problem.index}. ${problem.name}
               </a>
               <div style="margin-top: 3px;">
                 <span style="color: ${difficultyColor}; font-weight: bold; font-size: 11px;">
                   ★${problem.rating}
                 </span>
-                <span style="color: #888; font-size: 11px; margin-left: 8px;">
+                <span style="color: ${colors.lightText}; font-size: 11px; margin-left: 8px;">
                   ✓${problem.stats.solvedCount}
                 </span>
               </div>
               <div style="margin-top: 3px; font-size: 10px;">
-                ${problem.tags.slice(0, 3).map(tag => 
-                  `<span style="background: #e8f4fd; color: #1976d2; padding: 1px 4px; border-radius: 2px; margin-right: 3px;">${tag}</span>`
-                ).join('')}
+                ${problem.tags.slice(0, 3).map(tag => {
+                  const tagBg = colors.background === '#2d2d2d' ? '#1e3a5f' : '#e8f4fd';
+                  const tagColor = colors.background === '#2d2d2d' ? '#64b5f6' : '#1976d2';
+                  return `<span style="background: ${tagBg}; color: ${tagColor}; padding: 1px 4px; border-radius: 2px; margin-right: 3px;">${tag}</span>`;
+                }).join('')}
               </div>
             </div>
           </div>
@@ -389,7 +653,7 @@ class RecommendedQuestionsFeature {
     
     html += `
       <div style="margin-top: 10px; text-align: center;">
-        <button onclick="document.getElementById('cf-recommendations-panel').querySelector('#cf-recommendations-content').innerHTML = 'Loading...'; window.cfRecommendations.loadRecommendations();" 
+        <button id="cf-refresh-btn" 
                 style="background: #1976d2; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 11px;">
           🔄 Refresh
         </button>
@@ -398,8 +662,89 @@ class RecommendedQuestionsFeature {
     
     contentDiv.innerHTML = html;
     
+    // Add event listener for refresh button
+    const refreshBtn = document.getElementById('cf-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        console.log('[CF Enhancer] Refresh button clicked');
+        this.refreshRecommendations();
+      });
+    }
+    
     // Store reference for refresh functionality
     window.cfRecommendations = this;
+    
+    } finally {
+      // Reset the flag if we set it
+      if (!wasUpdatingTheme) {
+        this.isUpdatingTheme = false;
+      }
+    }
+  }
+
+  /**
+   * Refresh recommendations
+   */
+  async refreshRecommendations() {
+    const contentDiv = document.getElementById('cf-recommendations-content');
+    if (!contentDiv) return;
+    
+    const colors = await this.getThemeColors();
+    
+    // Show loading state
+    contentDiv.innerHTML = `
+      <div style="text-align: center; padding: 20px; color: ${colors.mutedText};">
+        <div style="margin-bottom: 10px;">
+          <div style="border: 2px solid ${colors.border}; border-top: 2px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        </div>
+        Loading new recommendations...
+      </div>
+    `;
+    
+    try {
+      // Clear the last recommendations to force new ones
+      this.lastRecommendations = [];
+      
+      // Load fresh recommendations
+      await this.loadRecommendations();
+    } catch (error) {
+      console.error('[CF Enhancer] Error in refreshRecommendations:', error);
+      const colors = await this.getThemeColors();
+      contentDiv.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: #d32f2f;">
+          <div style="margin-bottom: 10px;">❌</div>
+          Error refreshing recommendations<br>
+          <span style="font-size: 11px; color: ${colors.mutedText};">Check your internet connection</span>
+          <div style="margin-top: 10px;">
+            <button id="cf-retry-refresh-btn" 
+                    style="background: #1976d2; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px;">
+              🔄 Try Again
+            </button>
+          </div>
+        </div>
+      `;
+      
+      // Add event listener for retry button
+      setTimeout(() => {
+        const retryBtn = document.getElementById('cf-retry-refresh-btn');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            console.log('[CF Enhancer] Retry refresh button clicked');
+            this.refreshRecommendations();
+          });
+        }
+      }, 100);
+    }
+  }
+
+  /**
+   * Shuffle array using Fisher-Yates algorithm
+   */
+  shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
   }
 
   /**
