@@ -1,6 +1,31 @@
 # 🚀 Codeforces Enhancer - Modern Edition
 
-Enhanced Codeforces experience with modern Chrome Extension standards. This is a modernized version of the original [cf-enhancer](https://github.com/agul/cf-enhancer) by [agul](https://github.com/agul), rebuilt from the ground up by [JehadurRE](https://github.com/JehadurRE) to follow current Chrome extension best practices and ensure compatibility with modern browsers.
+Enhanced C## 🆕 What's New in Version 2.1.0
+
+### 🎯 Major New Feature: Rating Predictor
+- **Real-time rating predictions** during contests
+- **Live updates** with 30-second refresh intervals
+- **Enhanced ELO algorithm** with rating-dependent factors
+- **Visual performance indicators** with color-coded changes
+- **Detailed analytics** showing expected vs actual performance
+
+### Modern Architecture
+- **Manifest V3** compliance for future Chrome compatibility
+- **Async/await** patterns replacing deprecated synchronous APIs
+- **ES6+ JavaScript** with modern class-based architecture
+- **Content Security Policy** compliant code
+
+### Enhanced User Experience
+- **Beautiful modern UI** with gradient backgrounds and smooth animations
+- **Responsive design** that works on all screen sizes
+- **Quick access popup** for instant settings changes
+- **Comprehensive options page** with detailed descriptions
+
+### Developer Improvements
+- **Modular code structure** with separate feature files
+- **Comprehensive error handling** and logging
+- **TypeScript-ready** code patterns
+- **Extensive documentation** and commentse with modern Chrome Extension standards. This is a modernized version of the original [cf-enhancer](https://github.com/agul/cf-enhancer) by [agul](https://github.com/agul), rebuilt from the ground up by [JehadurRE](https://github.com/JehadurRE) to follow current Chrome extension best practices and ensure compatibility with modern browsers.
 
 ## ✨ Features
 
@@ -17,7 +42,16 @@ Enhanced Codeforces experience with modern Chrome Extension standards. This is a
 - **Interactive legend** with hover effects and submission counts
 - Toggle individual language highlighting with persistent state
 
-### 📝 Enhanced Attempt Display
+### � Rating Predictor ⭐ NEW
+- **Real-time rating change predictions** during contests
+- Shows predicted rating changes in a new "Rating Δ" column
+- **Live updates** every 30 seconds for ongoing contests
+- Advanced ELO-like algorithm with rating-dependent factors
+- Color-coded changes with performance indicators
+- Detailed tooltips showing expected vs actual rank
+- **CodeChef-style live rating tracking** for competitive programming
+
+### �📝 Enhanced Attempt Display
 - Show attempt counts for each problem in standings
 - Integrated with colorized standings feature
 - Helps analyze submission patterns
