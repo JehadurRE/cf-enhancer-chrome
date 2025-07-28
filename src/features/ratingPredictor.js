@@ -146,19 +146,26 @@ class RatingPredictorFeature {
       performanceHeader.style.cssText = headerStyle;
       headerRow.appendChild(performanceHeader);
 
+      // Predicted delta column
+      const predictedHeader = document.createElement('th');
+      predictedHeader.textContent = 'Δ Predicted';
+      predictedHeader.title = 'Our predicted rating change';
+      predictedHeader.style.cssText = headerStyle;
+      headerRow.appendChild(predictedHeader);
+
+      // Final delta column (from Codeforces)
+      const finalHeader = document.createElement('th');
+      finalHeader.textContent = 'Δ Final';
+      finalHeader.title = 'Actual rating change from Codeforces';
+      finalHeader.style.cssText = headerStyle;
+      headerRow.appendChild(finalHeader);
+
       // Rank change column
       const rankHeader = document.createElement('th');
-      rankHeader.textContent = 'Δ Rank';
-      rankHeader.title = 'Expected rank vs actual rank';
+      rankHeader.textContent = 'Rank Change';
+      rankHeader.title = 'Title/rank change (e.g., N→P, E→CM)';
       rankHeader.style.cssText = headerStyle;
       headerRow.appendChild(rankHeader);
-
-      // Rating change column
-      const ratingHeader = document.createElement('th');
-      ratingHeader.textContent = 'Δ Rating';
-      ratingHeader.title = 'Predicted rating change';
-      ratingHeader.style.cssText = headerStyle;
-      headerRow.appendChild(ratingHeader);
     }
 
     // Add cells for each participant
@@ -180,19 +187,27 @@ class RatingPredictorFeature {
       performanceCell.textContent = 'Loading...';
       row.appendChild(performanceCell);
 
-      // Rank change cell
-      const rankCell = document.createElement('td');
-      rankCell.id = `rank-change-${index}`;
-      rankCell.style.cssText = cellStyle;
-      rankCell.textContent = 'Loading...';
-      row.appendChild(rankCell);
+      // Predicted delta cell
+      const predictedCell = document.createElement('td');
+      predictedCell.id = `predicted-${index}`;
+      predictedCell.style.cssText = cellStyle;
+      predictedCell.textContent = 'Loading...';
+      row.appendChild(predictedCell);
 
-      // Rating change cell
-      const ratingCell = document.createElement('td');
-      ratingCell.id = `rating-change-${index}`;
-      ratingCell.style.cssText = cellStyle;
-      ratingCell.textContent = 'Loading...';
-      row.appendChild(ratingCell);
+      // Final delta cell (from CF)
+      const finalCell = document.createElement('td');
+      finalCell.id = `final-${index}`;
+      finalCell.style.cssText = cellStyle;
+      finalCell.textContent = 'TBD';
+      finalCell.title = 'Will show actual CF rating change after contest';
+      row.appendChild(finalCell);
+
+      // Rank change cell
+      const rankChangeCell = document.createElement('td');
+      rankChangeCell.id = `rank-change-${index}`;
+      rankChangeCell.style.cssText = cellStyle;
+      rankChangeCell.textContent = 'Loading...';
+      row.appendChild(rankChangeCell);
     });
   }
 
@@ -365,16 +380,25 @@ class RatingPredictorFeature {
         performance
       );
       
+      const newRating = currentRating + ratingChange;
+      
+      // Calculate rank changes
+      const currentRankTitle = this.getRankAbbreviation(currentRating);
+      const newRankTitle = this.getRankAbbreviation(newRating);
+      const rankChange = currentRankTitle !== newRankTitle ? `${currentRankTitle}→${newRankTitle}` : currentRankTitle;
+      
       predictions.push({
         handle: participant.handle,
         index: participant.index,
         currentRating: currentRating,
         performance: performance,
         ratingChange: ratingChange,
-        newRating: currentRating + ratingChange,
+        newRating: newRating,
         expectedRank: expectedRank,
         actualRank: rank,
-        rankChange: expectedRank - rank
+        currentRankTitle: currentRankTitle,
+        newRankTitle: newRankTitle,
+        rankChange: rankChange
       });
     });
     
@@ -410,6 +434,34 @@ class RatingPredictorFeature {
     
     // Ensure reasonable bounds
     return Math.max(800, Math.min(3500, Math.round(performance)));
+  }
+
+  /**
+   * Get rank title from rating
+   */
+  getRankTitle(rating) {
+    if (rating >= 2400) return 'IGM'; // International Grandmaster
+    if (rating >= 2300) return 'GM';  // Grandmaster
+    if (rating >= 2100) return 'IM';  // International Master
+    if (rating >= 1900) return 'M';   // Master
+    if (rating >= 1600) return 'E';   // Expert
+    if (rating >= 1400) return 'S';   // Specialist
+    if (rating >= 1200) return 'P';   // Pupil
+    return 'N'; // Newbie
+  }
+
+  /**
+   * Get rank title abbreviation
+   */
+  getRankAbbreviation(rating) {
+    if (rating >= 2400) return 'IGM'; // International Grandmaster
+    if (rating >= 2300) return 'GM';  // Grandmaster  
+    if (rating >= 2100) return 'IM';  // International Master
+    if (rating >= 1900) return 'M';   // Master
+    if (rating >= 1600) return 'E';   // Expert
+    if (rating >= 1400) return 'S';   // Specialist
+    if (rating >= 1200) return 'P';   // Pupil
+    return 'N'; // Newbie
   }
 
   /**
@@ -467,7 +519,7 @@ class RatingPredictorFeature {
   }
 
   /**
-   * Display rating changes in the three new columns
+   * Display rating changes in the four new columns
    */
   displayRatingChanges(predictions) {
     predictions.forEach(prediction => {
@@ -491,57 +543,83 @@ class RatingPredictorFeature {
         }
       }
 
-      // Rank change column
-      const rankCell = document.getElementById(`rank-change-${prediction.index}`);
-      if (rankCell) {
-        const rankChange = prediction.rankChange;
-        const rankText = rankChange > 0 ? `+${rankChange}` : `${rankChange}`;
-        rankCell.textContent = rankText;
-        rankCell.title = `Expected rank: ${prediction.expectedRank}, Actual rank: ${prediction.actualRank}`;
-        
-        // Color code rank change
-        if (rankChange > 0) {
-          rankCell.style.color = '#28a745'; // Green for better than expected
-          rankCell.style.backgroundColor = 'rgba(40, 167, 69, 0.1)';
-        } else if (rankChange < 0) {
-          rankCell.style.color = '#dc3545'; // Red for worse than expected
-          rankCell.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
-        } else {
-          rankCell.style.color = '#6c757d'; // Gray for as expected
-          rankCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
-        }
-      }
-
-      // Rating change column
-      const ratingCell = document.getElementById(`rating-change-${prediction.index}`);
-      if (ratingCell) {
+      // Predicted delta column
+      const predictedCell = document.getElementById(`predicted-${prediction.index}`);
+      if (predictedCell) {
         const change = prediction.ratingChange;
         const changeText = change > 0 ? `+${change}` : `${change}`;
         
-        ratingCell.innerHTML = `
+        predictedCell.innerHTML = `
           <div style="font-weight: bold;">${changeText}</div>
           <div style="font-size: 9px; opacity: 0.7;">${prediction.currentRating}→${prediction.newRating}</div>
         `;
         
-        ratingCell.title = `Current: ${prediction.currentRating}, Predicted: ${prediction.newRating}
-Performance: ${prediction.performance}
-Expected vs Actual: ${prediction.expectedRank} vs ${prediction.actualRank}`;
+        predictedCell.title = `Predicted: ${prediction.currentRating} → ${prediction.newRating} (${changeText})`;
         
-        // Color code rating change with intensity
+        // Color code the predicted change
         if (change > 0) {
           const intensity = Math.min(Math.abs(change) / 100, 1);
-          ratingCell.style.color = `rgb(${Math.round(40 * (1-intensity))}, ${Math.round(167 + 88 * intensity)}, ${Math.round(69 * (1-intensity))})`;
-          ratingCell.style.backgroundColor = `rgba(40, 167, 69, ${0.1 + 0.1 * intensity})`;
+          predictedCell.style.color = `rgb(${Math.round(40 * (1-intensity))}, ${Math.round(167 + 88 * intensity)}, ${Math.round(69 * (1-intensity))})`;
+          predictedCell.style.backgroundColor = `rgba(40, 167, 69, ${0.1 + 0.1 * intensity})`;
         } else if (change < 0) {
           const intensity = Math.min(Math.abs(change) / 100, 1);
-          ratingCell.style.color = `rgb(${Math.round(220 + 35 * intensity)}, ${Math.round(53 * (1-intensity))}, ${Math.round(69 * (1-intensity))})`;
-          ratingCell.style.backgroundColor = `rgba(220, 53, 69, ${0.1 + 0.1 * intensity})`;
+          predictedCell.style.color = `rgb(${Math.round(220 + 35 * intensity)}, ${Math.round(53 * (1-intensity))}, ${Math.round(69 * (1-intensity))})`;
+          predictedCell.style.backgroundColor = `rgba(220, 53, 69, ${0.1 + 0.1 * intensity})`;
         } else {
-          ratingCell.style.color = '#6c757d';
-          ratingCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
+          predictedCell.style.color = '#6c757d';
+          predictedCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
+        }
+      }
+
+      // Final delta column (Codeforces actual)
+      const finalCell = document.getElementById(`final-${prediction.index}`);
+      if (finalCell) {
+        // This will be populated with actual CF data when available
+        finalCell.textContent = 'TBD';
+        finalCell.title = 'Actual rating change from Codeforces (available after contest ends)';
+        finalCell.style.color = '#6c757d';
+        finalCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
+        finalCell.style.fontStyle = 'italic';
+      }
+
+      // Rank change column
+      const rankChangeCell = document.getElementById(`rank-change-${prediction.index}`);
+      if (rankChangeCell) {
+        rankChangeCell.textContent = prediction.rankChange;
+        rankChangeCell.title = `Current: ${prediction.currentRankTitle} (${prediction.currentRating}), Predicted: ${prediction.newRankTitle} (${prediction.newRating})`;
+        
+        // Color code rank changes
+        if (prediction.currentRankTitle !== prediction.newRankTitle) {
+          // Check if it's an upgrade or downgrade
+          const currentRankOrder = this.getRankOrder(prediction.currentRankTitle);
+          const newRankOrder = this.getRankOrder(prediction.newRankTitle);
+          
+          if (newRankOrder > currentRankOrder) {
+            // Rank upgrade
+            rankChangeCell.style.color = '#28a745';
+            rankChangeCell.style.backgroundColor = 'rgba(40, 167, 69, 0.15)';
+            rankChangeCell.style.fontWeight = 'bold';
+          } else {
+            // Rank downgrade
+            rankChangeCell.style.color = '#dc3545';
+            rankChangeCell.style.backgroundColor = 'rgba(220, 53, 69, 0.15)';
+            rankChangeCell.style.fontWeight = 'bold';
+          }
+        } else {
+          // No rank change
+          rankChangeCell.style.color = '#6c757d';
+          rankChangeCell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
         }
       }
     });
+  }
+
+  /**
+   * Get rank order for comparison (higher number = higher rank)
+   */
+  getRankOrder(rankAbbr) {
+    const ranks = { 'N': 1, 'P': 2, 'S': 3, 'E': 4, 'M': 5, 'IM': 6, 'GM': 7, 'IGM': 8 };
+    return ranks[rankAbbr] || 1;
   }
 
   /**
@@ -549,14 +627,23 @@ Expected vs Actual: ${prediction.expectedRank} vs ${prediction.actualRank}`;
    */
   displayError() {
     const performanceCells = document.querySelectorAll('[id^="performance-"]');
-    const rankCells = document.querySelectorAll('[id^="rank-change-"]');
-    const ratingCells = document.querySelectorAll('[id^="rating-change-"]');
+    const predictedCells = document.querySelectorAll('[id^="predicted-"]');
+    const finalCells = document.querySelectorAll('[id^="final-"]');
+    const rankChangeCells = document.querySelectorAll('[id^="rank-change-"]');
     
-    [...performanceCells, ...rankCells, ...ratingCells].forEach(cell => {
+    [...performanceCells, ...predictedCells, ...rankChangeCells].forEach(cell => {
       cell.textContent = 'Error';
       cell.style.color = '#dc3545';
       cell.style.backgroundColor = 'rgba(220, 53, 69, 0.1)';
       cell.title = 'Failed to calculate prediction';
+    });
+    
+    // Final cells remain as TBD since they're not calculated by us
+    finalCells.forEach(cell => {
+      cell.textContent = 'TBD';
+      cell.style.color = '#6c757d';
+      cell.style.backgroundColor = 'rgba(108, 117, 125, 0.05)';
+      cell.title = 'Actual rating change from Codeforces (available after contest ends)';
     });
   }
 
